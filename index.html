@@ -133,33 +133,75 @@
   }
 
   /* ====================================================
-     ホーム画面：ぷっくりカプセルマトリクス
+     ホーム画面：セクション（什器）ごとの動的配置
   ==================================================== */
-  .matrix-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-template-rows: repeat(3, 1fr);
+  .home-fixtures-wrapper {
+    display: flex;
     gap: 10px;
+    flex: 1;
+    min-height: 0;
+    overflow-x: auto;
+  }
+
+  .fixture-section-container {
+    display: flex;
+    flex-direction: column;
+    background: #0b1120;
+    border-radius: 12px;
+    padding: 6px;
+    border: 2px solid #334155;
+    flex: 1;
+    min-width: 220px;
+  }
+
+  /* 分類別の境界・アクセントカラー */
+  .fixture-section-container[data-cat="中華まん"] { border-color: #f97316; box-shadow: inset 0 0 10px rgba(249,115,22,0.15); }
+  .fixture-section-container[data-cat="ホッターズ"] { border-color: #3b82f6; box-shadow: inset 0 0 10px rgba(59,130,246,0.15); }
+  .fixture-section-container[data-cat="常温総菜"] { border-color: #10b981; box-shadow: inset 0 0 10px rgba(16,185,129,0.15); }
+
+  .fixture-section-header {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 6px 6px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #94a3b8;
+  }
+  .fixture-section-header span.cat-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #fff;
+  }
+  .cat-badge-中華まん { background: #ea580c; }
+  .cat-badge-ホッターズ { background: #2563eb; }
+  .cat-badge-常温総菜 { background: #059669; }
+
+  .fixture-grid {
+    display: grid;
+    gap: 6px;
     flex: 1;
     min-height: 0;
   }
 
   .cell-capsule {
     background: #0f172a;
-    border-radius: 16px;
-    padding: 5px;
+    border-radius: 12px;
+    padding: 4px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    border: 2px solid #1e293b;
-    box-shadow: inset 0 3px 6px rgba(0,0,0,0.7), 0 4px 10px rgba(0,0,0,0.4);
+    gap: 4px;
+    border: 1.5px solid #1e293b;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.7), 0 3px 6px rgba(0,0,0,0.4);
     position: relative;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
   }
 
   .cell-capsule.alert {
     border-color: #ef4444;
-    box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.5), 0 0 16px rgba(239, 68, 68, 0.6);
+    box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.5), 0 0 14px rgba(239, 68, 68, 0.6);
     animation: capsulePulse 1.6s infinite alternate;
   }
   @keyframes capsulePulse {
@@ -168,14 +210,14 @@
   }
 
   .capsule-btn {
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     position: relative;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 6px 8px;
-    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.1s ease;
+    padding: 5px 6px;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
   .capsule-btn:hover { filter: brightness(1.1); }
 
@@ -185,15 +227,15 @@
     box-shadow: 
       inset 0 2px 2px rgba(255, 255, 255, 0.5),
       inset 0 -2px 3px rgba(0, 0, 0, 0.3),
-      0 5px 0 var(--btn-cook-shadow),
-      0 7px 10px rgba(0, 0, 0, 0.5);
+      0 4px 0 var(--btn-cook-shadow),
+      0 5px 8px rgba(0, 0, 0, 0.5);
     border-top: 1px solid var(--btn-cook-bevel);
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
   }
   .btn-top-cook:active {
-    transform: translateY(4px);
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 var(--btn-cook-shadow), 0 3px 5px rgba(0,0,0,0.4);
+    transform: translateY(3px);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 var(--btn-cook-shadow), 0 2px 4px rgba(0,0,0,0.4);
   }
 
   .btn-bottom-sell {
@@ -202,37 +244,37 @@
     box-shadow: 
       inset 0 2px 2px rgba(255, 255, 255, 0.2),
       inset 0 -2px 3px rgba(0, 0, 0, 0.4),
-      0 5px 0 var(--btn-sell-shadow),
-      0 7px 10px rgba(0, 0, 0, 0.5);
+      0 4px 0 var(--btn-sell-shadow),
+      0 5px 8px rgba(0, 0, 0, 0.5);
     border-top: 1px solid var(--btn-sell-bevel);
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
   }
   .btn-bottom-sell:active {
-    transform: translateY(4px);
+    transform: translateY(3px);
     background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%);
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 #450a0a, 0 3px 5px rgba(0,0,0,0.4);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 #450a0a, 0 2px 4px rgba(0,0,0,0.4);
   }
 
   .cell-header-line { display: flex; justify-content: space-between; align-items: center; }
-  .item-title { font-size: 13px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; }
-  .action-pill-up { font-size: 9px; font-weight: 800; background: rgba(255, 255, 255, 0.25); color: #fff; padding: 1px 5px; border-radius: 10px; }
+  .item-title { font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
+  .action-pill-up { font-size: 9px; font-weight: 800; background: rgba(255, 255, 255, 0.25); color: #fff; padding: 1px 4px; border-radius: 8px; }
 
-  .stock-box { display: flex; justify-content: center; align-items: baseline; gap: 3px; margin: 2px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
-  .stock-val { font-size: 28px; font-weight: 900; line-height: 1; color: #fff; }
-  .stock-unit { font-size: 11px; font-weight: bold; color: #bfdbfe; }
+  .stock-box { display: flex; justify-content: center; align-items: baseline; gap: 2px; margin: 1px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
+  .stock-val { font-size: 24px; font-weight: 900; line-height: 1; color: #fff; }
+  .stock-unit { font-size: 10px; font-weight: bold; color: #bfdbfe; }
 
-  .target-line { display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+  .target-line { display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
   .target-line span { font-weight: 800; color: #e2e8f0; }
 
-  .sell-action-line { display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.35); padding: 2px 6px; border-radius: 6px; }
-  .rec-label { font-size: 10px; color: #94a3b8; }
-  .rec-val { font-size: 13px; font-weight: 900; color: #f87171; }
-  .action-pill-down { font-size: 9px; font-weight: 800; background: #475569; color: #cbd5e1; padding: 1px 4px; border-radius: 4px; }
+  .sell-action-line { display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.35); padding: 1px 4px; border-radius: 4px; }
+  .rec-label { font-size: 9px; color: #94a3b8; }
+  .rec-val { font-size: 11px; font-weight: 900; color: #f87171; }
+  .action-pill-down { font-size: 8px; font-weight: 800; background: #475569; color: #cbd5e1; padding: 1px 3px; border-radius: 3px; }
 
-  .badge-toast { position: absolute; right: 6px; top: 24px; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 900; color: #fff; display: none; box-shadow: 0 3px 8px rgba(0,0,0,0.6); z-index: 10; }
+  .badge-toast { position: absolute; right: 4px; top: 20px; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 900; color: #fff; display: none; box-shadow: 0 3px 6px rgba(0,0,0,0.6); z-index: 10; }
   .toast-cook { background: #10b981; border: 1px solid #34d399; }
-  .toast-sell { background: #f59e0b; top: auto; bottom: 22px; border: 1px solid #fbbf24; }
+  .toast-sell { background: #f59e0b; top: auto; bottom: 18px; border: 1px solid #fbbf24; }
 
   /* ====================================================
      マスタ設定共通スタイル
@@ -242,7 +284,7 @@
     background: var(--card-bg);
     border: 1px solid #334155;
     border-radius: 10px;
-    padding: 12px 16px;
+    padding: 10px 14px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -251,10 +293,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .master-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     color: #38bdf8;
   }
@@ -263,12 +305,11 @@
     box-shadow: 0 3px 0 var(--btn-save-shadow);
     color: #fff;
     border: none;
-    padding: 6px 16px;
+    padding: 6px 14px;
     border-radius: 6px;
     font-weight: 800;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
-    transition: transform 0.05s ease;
   }
   .btn-save-action:active {
     transform: translateY(2px);
@@ -321,35 +362,68 @@
   }
 
   /* ====================================================
-     マスタ③ 什器レイアウト配置画面
+     什器配置マスタ：柔軟な什器セクション構成
   ==================================================== */
-  .layout-preset-selector {
+  .fixture-config-bar {
     display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 10px;
+    margin-bottom: 10px;
     align-items: center;
+    background: #0f172a;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
   }
-  .layout-grid-preview {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    gap: 8px;
+  .fixture-layout-editor {
+    display: flex;
+    gap: 12px;
     flex: 1;
     min-height: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
-  .layout-cell-box {
+  .fixture-section-edit-card {
     background: #0f172a;
-    border: 1.5px dashed #475569;
     border-radius: 10px;
+    border: 2px solid #334155;
     padding: 8px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    min-width: 280px;
+    flex: 1;
   }
-  .layout-cell-title {
-    font-size: 11px;
-    color: #38bdf8;
-    font-weight: bold;
+  .fixture-section-edit-card[data-cat="中華まん"] { border-color: #f97316; }
+  .fixture-section-edit-card[data-cat="ホッターズ"] { border-color: #3b82f6; }
+  .fixture-section-edit-card[data-cat="常温総菜"] { border-color: #10b981; }
+
+  .fixture-edit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 6px;
+  }
+  .fixture-matrix-edit {
+    display: grid;
+    gap: 6px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+    background: #070c18;
+    border-radius: 6px;
+  }
+  .edit-cell-box {
+    background: #1e293b;
+    border: 1px dashed #475569;
+    border-radius: 6px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .edit-cell-label {
+    font-size: 10px;
+    color: #94a3b8;
   }
 </style>
 </head>
@@ -374,14 +448,14 @@
 
 <!-- ==================== HOME 画面 ==================== -->
 <div id="homeView" class="view-container active">
-  <div class="matrix-grid" id="matrixGrid"></div>
+  <div class="home-fixtures-wrapper" id="homeFixturesWrapper"></div>
 </div>
 
 <!-- ==================== ① 商品マスタ ==================== -->
 <div id="itemMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
-      <div class="master-title">📦 商品マスタ設定（基本情報・調理＆鮮度基準）</div>
+      <div class="master-title">📦 商品マスタ設定（基本情報・価格・販売期限）</div>
       <button class="btn-save-action" onclick="saveItemMaster()">💾 商品設定を保存</button>
     </div>
     <div class="table-scroll">
@@ -390,10 +464,9 @@
           <tr>
             <th style="width: 50px;">ID</th>
             <th style="width: 150px;">商品名</th>
-            <th style="width: 110px;">カテゴリ</th>
-            <th style="width: 90px;">揚時間(分)</th>
-            <th style="width: 90px;">保温期限(h)</th>
-            <th style="width: 90px;">最低比率</th>
+            <th style="width: 110px;">分類 (カテゴリ)</th>
+            <th style="width: 100px;">価格 (税込 円)</th>
+            <th style="width: 110px;">販売期限 (時間)</th>
           </tr>
         </thead>
         <tbody id="itemMasterBody"></tbody>
@@ -406,24 +479,25 @@
 <div id="scheduleMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
-      <div class="master-title">⏰ 時間帯別 目標陳列数マスタ</div>
+      <div class="master-title">⏰ 時間帯別 最高在庫数 ＆ 最低比率マスタ</div>
       <div style="display:flex; gap:10px; align-items:center;">
         <select id="scheduleDaySelect" class="ctrl-select" style="width:100px;" onchange="renderScheduleMasterTable()">
           <option value="weekday" selected>平日</option>
           <option value="weekend">土日祝</option>
         </select>
-        <button class="btn-save-action" onclick="saveScheduleMaster()">💾 目標数を保存</button>
+        <button class="btn-save-action" onclick="saveScheduleMaster()">💾 最高在庫数を保存</button>
       </div>
     </div>
     <div class="table-scroll">
       <table class="master-table">
         <thead>
           <tr>
-            <th style="width: 150px;">商品名</th>
-            <th style="width: 100px;">カテゴリ</th>
-            <th style="width: 100px;">朝 (6:00~) 目標</th>
-            <th style="width: 100px;">昼 (11:00~) 目標</th>
-            <th style="width: 100px;">夕 (16:00~) 目標</th>
+            <th style="width: 140px;">商品名</th>
+            <th style="width: 90px;">分類</th>
+            <th style="width: 90px;">朝 最高在庫</th>
+            <th style="width: 90px;">昼 最高在庫</th>
+            <th style="width: 90px;">夕 最高在庫</th>
+            <th style="width: 90px;">最低比率</th>
           </tr>
         </thead>
         <tbody id="scheduleMasterBody"></tbody>
@@ -436,95 +510,128 @@
 <div id="layoutMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
-      <div class="master-title">📐 6×3什器レイアウト配置マスタ（定位置設定）</div>
-      <button class="btn-save-action" onclick="saveLayoutMaster()">💾 配置レイアウトを保存</button>
+      <div class="master-title">📐 什器レイアウト配置マスタ（行・列増減 ＆ 分類別境界設定）</div>
+      <button class="btn-save-action" onclick="saveLayoutMaster()">💾 什器設定を保存して反映</button>
     </div>
-    <div class="layout-grid-preview" id="layoutGridPreview"></div>
+    <div class="fixture-layout-editor" id="fixtureLayoutEditor"></div>
   </div>
 </div>
 
 <script>
-// ① 商品マスタデータ
+// ① 商品マスタデータ（価格、販売期限を統合）
 let ITEMS = [
-  { id: 0, name: "（空き）", category: "-", cookMin: 0, lifeHour: 0, minRatio: 0 },
-  { id: 1, name: "ファミチキ", category: "ホッターズ", cookMin: 8, lifeHour: 4, minRatio: 0.4 },
-  { id: 2, name: "ファミチキレッド", category: "ホッターズ", cookMin: 8, lifeHour: 4, minRatio: 0.4 },
-  { id: 3, name: "クリスピー", category: "ホッターズ", cookMin: 6, lifeHour: 4, minRatio: 0.5 },
-  { id: 4, name: "スパイシー", category: "ホッターズ", cookMin: 7, lifeHour: 4, minRatio: 0.5 },
-  { id: 5, name: "山賊焼", category: "ホッターズ", cookMin: 8, lifeHour: 4, minRatio: 0.5 },
-  { id: 6, name: "ころじゃが", category: "ホッターズ", cookMin: 4, lifeHour: 4, minRatio: 0.5 },
-  { id: 7, name: "ハッシュドポテト", category: "ホッターズ", cookMin: 5, lifeHour: 4, minRatio: 0.5 },
-  { id: 8, name: "ファミコロ", category: "ホッターズ", cookMin: 5, lifeHour: 4, minRatio: 0.5 },
-  { id: 9, name: "黒豚まん", category: "中華まん", cookMin: 0, lifeHour: 6, minRatio: 0.3 },
-  { id: 10, name: "肉まん", category: "中華まん", cookMin: 0, lifeHour: 6, minRatio: 0.3 },
-  { id: 11, name: "ピザまん", category: "中華まん", cookMin: 0, lifeHour: 6, minRatio: 0.3 },
-  { id: 12, name: "あんまん", category: "中華まん", cookMin: 0, lifeHour: 6, minRatio: 0.3 },
-  { id: 13, name: "ももタレ", category: "常温総菜", cookMin: 0, lifeHour: 0, minRatio: 0.5 },
-  { id: 14, name: "かわタレ", category: "常温総菜", cookMin: 0, lifeHour: 0, minRatio: 0.5 },
-  { id: 15, name: "もも塩", category: "常温総菜", cookMin: 0, lifeHour: 0, minRatio: 0.5 },
-  { id: 16, name: "かわ塩", category: "常温総菜", cookMin: 0, lifeHour: 0, minRatio: 0.5 },
-  { id: 17, name: "ジャンボフランク", category: "ホッターズ", cookMin: 15, lifeHour: 6, minRatio: 0.5 }
+  { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
+  { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
+  { id: 2, name: "ファミチキレッド", category: "ホッターズ", price: 240, limitHour: 4 },
+  { id: 3, name: "クリスピー", category: "ホッターズ", price: 180, limitHour: 4 },
+  { id: 4, name: "スパイシー", category: "ホッターズ", price: 198, limitHour: 4 },
+  { id: 5, name: "山賊焼", category: "ホッターズ", price: 260, limitHour: 4 },
+  { id: 6, name: "ころじゃが", category: "ホッターズ", price: 180, limitHour: 4 },
+  { id: 7, name: "ハッシュドポテト", category: "ホッターズ", price: 130, limitHour: 4 },
+  { id: 8, name: "ファミコロ", category: "ホッターズ", price: 108, limitHour: 4 },
+  { id: 9, name: "黒豚まん", category: "中華まん", price: 240, limitHour: 6 },
+  { id: 10, name: "肉まん", category: "中華まん", price: 160, limitHour: 6 },
+  { id: 11, name: "ピザまん", category: "中華まん", price: 160, limitHour: 6 },
+  { id: 12, name: "あんまん", category: "中華まん", price: 150, limitHour: 6 },
+  { id: 13, name: "ももタレ", category: "常温総菜", price: 160, limitHour: 8 },
+  { id: 14, name: "かわタレ", category: "常温総菜", price: 160, limitHour: 8 },
+  { id: 15, name: "もも塩", category: "常温総菜", price: 160, limitHour: 8 },
+  { id: 16, name: "かわ塩", category: "常温総菜", price: 160, limitHour: 8 },
+  { id: 17, name: "ジャンボフランク", category: "ホッターズ", price: 190, limitHour: 6 }
 ];
 
-// ② スケジュール目標マスタデータ（平日/土日祝）
-let SCHEDULE_TARGETS = {
+// ② スケジュール最高在庫数＆最低比率
+let SCHEDULE_CONFIG = {
   weekday: {
-    1: { morning: 8, lunch: 12, evening: 12 },
-    2: { morning: 6, lunch: 12, evening: 12 },
-    3: { morning: 3, lunch: 4, evening: 3 },
-    4: { morning: 2, lunch: 4, evening: 2 },
-    5: { morning: 2, lunch: 2, evening: 2 },
-    6: { morning: 4, lunch: 4, evening: 4 },
-    7: { morning: 2, lunch: 4, evening: 4 },
-    8: { morning: 1, lunch: 2, evening: 2 },
-    9: { morning: 1, lunch: 1, evening: 1 },
-    10: { morning: 5, lunch: 5, evening: 16 },
-    11: { morning: 2, lunch: 2, evening: 2 },
-    12: { morning: 1, lunch: 1, evening: 1 },
-    13: { morning: 3, lunch: 4, evening: 5 },
-    14: { morning: 4, lunch: 4, evening: 6 },
-    15: { morning: 3, lunch: 3, evening: 4 },
-    16: { morning: 3, lunch: 3, evening: 4 },
-    17: { morning: 2, lunch: 2, evening: 3 }
+    1: { morning: 8, lunch: 12, evening: 12, minRatio: 0.4 },
+    2: { morning: 6, lunch: 12, evening: 12, minRatio: 0.4 },
+    3: { morning: 3, lunch: 4, evening: 3, minRatio: 0.5 },
+    4: { morning: 2, lunch: 4, evening: 2, minRatio: 0.5 },
+    5: { morning: 2, lunch: 2, evening: 2, minRatio: 0.5 },
+    6: { morning: 4, lunch: 4, evening: 4, minRatio: 0.5 },
+    7: { morning: 2, lunch: 4, evening: 4, minRatio: 0.5 },
+    8: { morning: 1, lunch: 2, evening: 2, minRatio: 0.5 },
+    9: { morning: 1, lunch: 1, evening: 1, minRatio: 0.3 },
+    10: { morning: 5, lunch: 5, evening: 16, minRatio: 0.3 },
+    11: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
+    12: { morning: 1, lunch: 1, evening: 1, minRatio: 0.3 },
+    13: { morning: 3, lunch: 4, evening: 5, minRatio: 0.5 },
+    14: { morning: 4, lunch: 4, evening: 6, minRatio: 0.5 },
+    15: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 },
+    16: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 },
+    17: { morning: 2, lunch: 2, evening: 3, minRatio: 0.5 }
   },
   weekend: {
-    1: { morning: 10, lunch: 16, evening: 16 },
-    2: { morning: 8, lunch: 14, evening: 14 },
-    3: { morning: 4, lunch: 6, evening: 4 },
-    4: { morning: 3, lunch: 5, evening: 3 },
-    5: { morning: 3, lunch: 4, evening: 3 },
-    6: { morning: 5, lunch: 6, evening: 5 },
-    7: { morning: 3, lunch: 5, evening: 5 },
-    8: { morning: 2, lunch: 3, evening: 3 },
-    9: { morning: 2, lunch: 2, evening: 2 },
-    10: { morning: 8, lunch: 8, evening: 18 },
-    11: { morning: 3, lunch: 3, evening: 3 },
-    12: { morning: 2, lunch: 2, evening: 2 },
-    13: { morning: 4, lunch: 5, evening: 6 },
-    14: { morning: 5, lunch: 5, evening: 7 },
-    15: { morning: 4, lunch: 4, evening: 5 },
-    16: { morning: 4, lunch: 4, evening: 5 },
-    17: { morning: 3, lunch: 4, evening: 4 }
+    1: { morning: 10, lunch: 16, evening: 16, minRatio: 0.4 },
+    2: { morning: 8, lunch: 14, evening: 14, minRatio: 0.4 },
+    3: { morning: 4, lunch: 6, evening: 4, minRatio: 0.5 },
+    4: { morning: 3, lunch: 5, evening: 3, minRatio: 0.5 },
+    5: { morning: 3, lunch: 4, evening: 3, minRatio: 0.5 },
+    6: { morning: 5, lunch: 6, evening: 5, minRatio: 0.5 },
+    7: { morning: 3, lunch: 5, evening: 5, minRatio: 0.5 },
+    8: { morning: 2, lunch: 3, evening: 3, minRatio: 0.5 },
+    9: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
+    10: { morning: 8, lunch: 8, evening: 18, minRatio: 0.3 },
+    11: { morning: 3, lunch: 3, evening: 3, minRatio: 0.3 },
+    12: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
+    13: { morning: 4, lunch: 5, evening: 6, minRatio: 0.5 },
+    14: { morning: 5, lunch: 5, evening: 7, minRatio: 0.5 },
+    15: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
+    16: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
+    17: { morning: 3, lunch: 4, evening: 4, minRatio: 0.5 }
   }
 };
 
-// ③ 什器レイアウト状態（18マス）
-let gridState = Array(18).fill(null).map((_, index) => ({
-  cellId: index,
-  itemId: index < 17 ? index + 1 : 0,
-  currentStock: 4,
-  cookBuffer: 0,
-  cookTimer: null,
-  cookRemainingSec: 0,
-  sellBuffer: 0,
-  sellTimer: null,
-  sellRemainingSec: 0
-}));
+// ③ 什器セクション別定義（行・列増減対応）
+let FIXTURE_SECTIONS = [
+  {
+    id: "sec_steam",
+    name: "中華まん什器",
+    category: "中華まん",
+    cols: 2,
+    rows: 6,
+    cells: [
+      { itemId: 9, stock: 1 }, { itemId: 0, stock: 0 },
+      { itemId: 10, stock: 5 }, { itemId: 0, stock: 0 },
+      { itemId: 11, stock: 2 }, { itemId: 0, stock: 0 },
+      { itemId: 12, stock: 1 }, { itemId: 0, stock: 0 },
+      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
+      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+    ]
+  },
+  {
+    id: "sec_hotters",
+    name: "ホッターズ什器",
+    category: "ホッターズ",
+    cols: 5,
+    rows: 3,
+    cells: [
+      { itemId: 1, stock: 8 }, { itemId: 2, stock: 6 }, { itemId: 17, stock: 2 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
+      { itemId: 3, stock: 3 }, { itemId: 4, stock: 2 }, { itemId: 5, stock: 2 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
+      { itemId: 6, stock: 4 }, { itemId: 7, stock: 2 }, { itemId: 8, stock: 1 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+    ]
+  },
+  {
+    id: "sec_ambient",
+    name: "常温総菜什器",
+    category: "常温総菜",
+    cols: 2,
+    rows: 4,
+    cells: [
+      { itemId: 13, stock: 3 }, { itemId: 14, stock: 4 },
+      { itemId: 15, stock: 3 }, { itemId: 16, stock: 3 },
+      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
+      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+    ]
+  }
+];
+
+// バッファ管理
+let cellBuffers = {};
 
 let currentScheduleKey = "lunch";
 let currentDayType = "weekday";
 
-// 時計＆自動更新
 function updateClock() {
   const now = new Date();
   const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
@@ -546,11 +653,10 @@ function updateClock() {
 
   if (currentScheduleKey !== newKey) {
     currentScheduleKey = newKey;
-    renderGrid();
+    renderHomeFixtures();
   }
 }
 
-// 画面タブ切り替え
 function switchView(viewName) {
   document.querySelectorAll(".nav-tab").forEach(tab => tab.classList.remove("active"));
   document.querySelectorAll(".view-container").forEach(v => v.classList.remove("active"));
@@ -558,7 +664,7 @@ function switchView(viewName) {
   if (viewName === 'home') {
     document.querySelectorAll(".nav-tab")[0].classList.add("active");
     document.getElementById("homeView").classList.add("active");
-    renderGrid();
+    renderHomeFixtures();
   } else if (viewName === 'itemMaster') {
     document.querySelectorAll(".nav-tab")[1].classList.add("active");
     document.getElementById("itemMasterView").classList.add("active");
@@ -570,144 +676,173 @@ function switchView(viewName) {
   } else if (viewName === 'layoutMaster') {
     document.querySelectorAll(".nav-tab")[3].classList.add("active");
     document.getElementById("layoutMasterView").classList.add("active");
-    renderLayoutMasterGrid();
+    renderLayoutMasterEditor();
   }
 }
 
-// ==================== HOME レンダリング ====================
+// ==================== HOME 什器レンダリング ====================
 function getTargetMax(itemId) {
-  if (itemId === 0 || !SCHEDULE_TARGETS[currentDayType][itemId]) return 0;
-  return SCHEDULE_TARGETS[currentDayType][itemId][currentScheduleKey] || 0;
+  if (itemId === 0 || !SCHEDULE_CONFIG[currentDayType][itemId]) return 0;
+  return SCHEDULE_CONFIG[currentDayType][itemId][currentScheduleKey] || 0;
+}
+function getMinRatio(itemId) {
+  if (itemId === 0 || !SCHEDULE_CONFIG[currentDayType][itemId]) return 0;
+  return SCHEDULE_CONFIG[currentDayType][itemId].minRatio || 0;
 }
 
-function renderGrid() {
-  const container = document.getElementById("matrixGrid");
+function renderHomeFixtures() {
+  const container = document.getElementById("homeFixturesWrapper");
   container.innerHTML = "";
 
-  gridState.forEach((cell, idx) => {
-    const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
-    const maxQty = getTargetMax(cell.itemId);
-    const minQty = Math.ceil(maxQty * (item.minRatio || 0));
-    const recommendQty = Math.max(0, maxQty - cell.currentStock);
-    const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
+  FIXTURE_SECTIONS.forEach((sec, sIdx) => {
+    const secBox = document.createElement("div");
+    secBox.className = "fixture-section-container";
+    secBox.setAttribute("data-cat", sec.category);
 
-    const capsule = document.createElement("div");
-    capsule.className = `cell-capsule ${isAlert ? 'alert' : ''}`;
-    capsule.id = `capsule-${idx}`;
-
-    capsule.innerHTML = `
-      <div class="capsule-btn btn-top-cook" onclick="handleTouch(${idx}, 'cook')">
-        <div class="cell-header-line">
-          <span class="item-title">${item.name}</span>
-          <span class="action-pill-up">＋調理</span>
-        </div>
-        <div class="stock-box">
-          <span class="stock-val">${cell.itemId === 0 ? '-' : cell.currentStock}</span>
-          <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
-        </div>
-        <div class="badge-toast toast-cook" id="cook-badge-${idx}"></div>
+    secBox.innerHTML = `
+      <div class="fixture-section-header">
+        <span>${sec.name} (${sec.rows}段×${sec.cols}列)</span>
+        <span class="cat-badge cat-badge-${sec.category}">${sec.category}</span>
       </div>
-
-      <div class="capsule-btn btn-bottom-sell" onclick="handleTouch(${idx}, 'sell')">
-        <div class="target-line">
-          <div>最高: <span>${maxQty}</span></div>
-          <div>最低: <span>${minQty}</span></div>
-        </div>
-        <div class="sell-action-line">
-          <div>
-            <span class="rec-label">推奨: </span>
-            <span class="rec-val">${cell.itemId === 0 ? '-' : recommendQty + '個'}</span>
-          </div>
-          <span class="action-pill-down">−販売</span>
-        </div>
-        <div class="badge-toast toast-sell" id="sell-badge-${idx}"></div>
-      </div>
+      <div class="fixture-grid" style="grid-template-columns: repeat(${sec.cols}, 1fr); grid-template-rows: repeat(${sec.rows}, 1fr);" id="fgrid-${sIdx}"></div>
     `;
+    container.appendChild(secBox);
 
-    container.appendChild(capsule);
-    updateBadges(idx);
+    const gridEl = secBox.querySelector(`#fgrid-${sIdx}`);
+    sec.cells.forEach((cell, cIdx) => {
+      const cellKey = `${sIdx}_${cIdx}`;
+      const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+      const maxQty = getTargetMax(cell.itemId);
+      const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
+      const recommendQty = Math.max(0, maxQty - cell.stock);
+      const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
+
+      const capsule = document.createElement("div");
+      capsule.className = `cell-capsule ${isAlert ? 'alert' : ''}`;
+      capsule.id = `capsule-${cellKey}`;
+
+      capsule.innerHTML = `
+        <div class="capsule-btn btn-top-cook" onclick="handleTouch('${cellKey}', 'cook')">
+          <div class="cell-header-line">
+            <span class="item-title">${item.name}</span>
+            <span class="action-pill-up">＋調理</span>
+          </div>
+          <div class="stock-box">
+            <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
+            <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
+          </div>
+          <div class="badge-toast toast-cook" id="cook-badge-${cellKey}"></div>
+        </div>
+
+        <div class="capsule-btn btn-bottom-sell" onclick="handleTouch('${cellKey}', 'sell')">
+          <div class="target-line">
+            <div>最高: <span>${maxQty}</span></div>
+            <div>最低: <span>${minQty}</span></div>
+          </div>
+          <div class="sell-action-line">
+            <div>
+              <span class="rec-label">推奨: </span>
+              <span class="rec-val">${cell.itemId === 0 ? '-' : recommendQty + '個'}</span>
+            </div>
+            <span class="action-pill-down">−販売</span>
+          </div>
+          <div class="badge-toast toast-sell" id="sell-badge-${cellKey}"></div>
+        </div>
+      `;
+
+      gridEl.appendChild(capsule);
+      updateToastBadges(cellKey);
+    });
   });
 }
 
-function handleTouch(index, type) {
-  const cell = gridState[index];
+function handleTouch(cellKey, type) {
+  const [sIdx, cIdx] = cellKey.split("_").map(Number);
+  const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
   if (cell.itemId === 0) return;
 
+  if (!cellBuffers[cellKey]) {
+    cellBuffers[cellKey] = { cook: 0, cookTimer: null, cookSec: 0, sell: 0, sellTimer: null, sellSec: 0 };
+  }
+  const buf = cellBuffers[cellKey];
+
   if (type === 'cook') {
-    cell.currentStock++;
-    cell.cookBuffer++;
-    startTimer(index, 'cook');
+    cell.stock++;
+    buf.cook++;
+    startCommitTimer(cellKey, 'cook');
   } else {
-    if (cell.currentStock > 0) {
-      cell.currentStock--;
-      cell.sellBuffer++;
-      startTimer(index, 'sell');
+    if (cell.stock > 0) {
+      cell.stock--;
+      buf.sell++;
+      startCommitTimer(cellKey, 'sell');
     }
   }
-  refreshCell(index);
+  refreshHomeCell(cellKey);
 }
 
-function startTimer(index, type) {
-  const cell = gridState[index];
+function startCommitTimer(cellKey, type) {
+  const buf = cellBuffers[cellKey];
   if (type === 'cook') {
-    if (cell.cookTimer) clearInterval(cell.cookTimer);
-    cell.cookRemainingSec = 60;
-    cell.cookTimer = setInterval(() => {
-      cell.cookRemainingSec--;
-      if (cell.cookRemainingSec <= 0) {
-        clearInterval(cell.cookTimer);
-        cell.cookTimer = null;
-        cell.cookBuffer = 0;
+    if (buf.cookTimer) clearInterval(buf.cookTimer);
+    buf.cookSec = 60;
+    buf.cookTimer = setInterval(() => {
+      buf.cookSec--;
+      if (buf.cookSec <= 0) {
+        clearInterval(buf.cookTimer);
+        buf.cookTimer = null;
+        buf.cook = 0;
       }
-      updateBadges(index);
+      updateToastBadges(cellKey);
     }, 1000);
   } else {
-    if (cell.sellTimer) clearInterval(cell.sellTimer);
-    cell.sellRemainingSec = 60;
-    cell.sellTimer = setInterval(() => {
-      cell.sellRemainingSec--;
-      if (cell.sellRemainingSec <= 0) {
-        clearInterval(cell.sellTimer);
-        cell.sellTimer = null;
-        cell.sellBuffer = 0;
+    if (buf.sellTimer) clearInterval(buf.sellTimer);
+    buf.sellSec = 60;
+    buf.sellTimer = setInterval(() => {
+      buf.sellSec--;
+      if (buf.sellSec <= 0) {
+        clearInterval(buf.sellTimer);
+        buf.sellTimer = null;
+        buf.sell = 0;
       }
-      updateBadges(index);
+      updateToastBadges(cellKey);
     }, 1000);
   }
-  updateBadges(index);
+  updateToastBadges(cellKey);
 }
 
-function updateBadges(index) {
-  const cell = gridState[index];
-  const cb = document.getElementById(`cook-badge-${index}`);
-  const sb = document.getElementById(`sell-badge-${index}`);
+function updateToastBadges(cellKey) {
+  const buf = cellBuffers[cellKey];
+  const cb = document.getElementById(`cook-badge-${cellKey}`);
+  const sb = document.getElementById(`sell-badge-${cellKey}`);
+  if (!buf) return;
+
   if (cb) {
-    cb.style.display = cell.cookBuffer > 0 ? 'block' : 'none';
-    cb.innerText = `+${cell.cookBuffer} 調理 (${cell.cookRemainingSec}s)`;
+    cb.style.display = buf.cook > 0 ? 'block' : 'none';
+    cb.innerText = `+${buf.cook} 調理 (${buf.cookSec}s)`;
   }
   if (sb) {
-    sb.style.display = cell.sellBuffer > 0 ? 'block' : 'none';
-    sb.innerText = `-${cell.sellBuffer} 販売 (${cell.sellRemainingSec}s)`;
+    sb.style.display = buf.sell > 0 ? 'block' : 'none';
+    sb.innerText = `-${buf.sell} 販売 (${buf.sellSec}s)`;
   }
 }
 
-function refreshCell(index) {
-  const cell = gridState[index];
-  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+function refreshHomeCell(cellKey) {
+  const [sIdx, cIdx] = cellKey.split("_").map(Number);
+  const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
   const maxQty = getTargetMax(cell.itemId);
-  const minQty = Math.ceil(maxQty * (item.minRatio || 0));
-  const recommendQty = Math.max(0, maxQty - cell.currentStock);
-  const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
+  const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
+  const recommendQty = Math.max(0, maxQty - cell.stock);
+  const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
 
-  const cap = document.getElementById(`capsule-${index}`);
+  const cap = document.getElementById(`capsule-${cellKey}`);
   if (!cap) return;
 
   if (isAlert) cap.classList.add('alert');
   else cap.classList.remove('alert');
 
-  cap.querySelector('.stock-val').innerText = cell.itemId === 0 ? '-' : cell.currentStock;
+  cap.querySelector('.stock-val').innerText = cell.itemId === 0 ? '-' : cell.stock;
   cap.querySelector('.rec-val').innerText = cell.itemId === 0 ? '-' : recommendQty + '個';
-  updateBadges(index);
+  updateToastBadges(cellKey);
 }
 
 // ==================== ① 商品マスタ処理 ====================
@@ -717,10 +852,15 @@ function renderItemMasterTable() {
     <tr>
       <td>${item.id}</td>
       <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}"></td>
-      <td><input class="ctrl-input" type="text" id="im-cat-${item.id}" value="${item.category}"></td>
-      <td><input class="ctrl-input" type="number" id="im-cookMin-${item.id}" value="${item.cookMin}"></td>
-      <td><input class="ctrl-input" type="number" id="im-lifeHour-${item.id}" value="${item.lifeHour}"></td>
-      <td><input class="ctrl-input" type="number" step="0.1" id="im-minRatio-${item.id}" value="${item.minRatio}"></td>
+      <td>
+        <select class="ctrl-select" id="im-cat-${item.id}">
+          <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
+          <option value="中華まん" ${item.category === '中華まん' ? 'selected' : ''}>中華まん</option>
+          <option value="常温総菜" ${item.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
+        </select>
+      </td>
+      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}"></td>
+      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}"></td>
     </tr>
   `).join("");
 }
@@ -730,21 +870,20 @@ function saveItemMaster() {
     if (item.id === 0) return;
     item.name = document.getElementById(`im-name-${item.id}`).value;
     item.category = document.getElementById(`im-cat-${item.id}`).value;
-    item.cookMin = parseInt(document.getElementById(`im-cookMin-${item.id}`).value) || 0;
-    item.lifeHour = parseInt(document.getElementById(`im-lifeHour-${item.id}`).value) || 0;
-    item.minRatio = parseFloat(document.getElementById(`im-minRatio-${item.id}`).value) || 0;
+    item.price = parseInt(document.getElementById(`im-price-${item.id}`).value) || 0;
+    item.limitHour = parseFloat(document.getElementById(`im-limitHour-${item.id}`).value) || 0;
   });
-  alert("商品マスタを保存しました！");
+  alert("商品マスタ（価格・販売期限）を保存しました！");
 }
 
 // ==================== ② スケジュールマスタ処理 ====================
 function renderScheduleMasterTable() {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const tbody = document.getElementById("scheduleMasterBody");
-  const targetMap = SCHEDULE_TARGETS[dayType];
+  const targetMap = SCHEDULE_CONFIG[dayType];
 
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => {
-    const t = targetMap[item.id] || { morning: 0, lunch: 0, evening: 0 };
+    const t = targetMap[item.id] || { morning: 0, lunch: 0, evening: 0, minRatio: 0.4 };
     return `
       <tr>
         <td><b>${item.name}</b></td>
@@ -752,6 +891,7 @@ function renderScheduleMasterTable() {
         <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}"></td>
         <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}"></td>
         <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}"></td>
+        <td><input class="ctrl-input" type="number" step="0.1" id="sm-ratio-${item.id}" value="${t.minRatio}"></td>
       </tr>
     `;
   }).join("");
@@ -761,52 +901,108 @@ function saveScheduleMaster() {
   const dayType = document.getElementById("scheduleDaySelect").value;
   ITEMS.forEach(item => {
     if (item.id === 0) return;
-    SCHEDULE_TARGETS[dayType][item.id] = {
+    SCHEDULE_CONFIG[dayType][item.id] = {
       morning: parseInt(document.getElementById(`sm-m-${item.id}`).value) || 0,
       lunch: parseInt(document.getElementById(`sm-l-${item.id}`).value) || 0,
-      evening: parseInt(document.getElementById(`sm-e-${item.id}`).value) || 0
+      evening: parseInt(document.getElementById(`sm-e-${item.id}`).value) || 0,
+      minRatio: parseFloat(document.getElementById(`sm-ratio-${item.id}`).value) || 0
     };
   });
-  alert(`スケジュール目標数（${dayType === 'weekday' ? '平日' : '土日祝'}）を保存しました！`);
+  alert(`スケジュール最高在庫数（${dayType === 'weekday' ? '平日' : '土日祝'}）を保存しました！`);
 }
 
-// ==================== ③ 什器配置マスタ処理 ====================
-function renderLayoutMasterGrid() {
-  const container = document.getElementById("layoutGridPreview");
+// ==================== ③ 什器配置マスタ（行・列増減 ＆ 分類別境界） ====================
+function renderLayoutMasterEditor() {
+  const container = document.getElementById("fixtureLayoutEditor");
   container.innerHTML = "";
 
-  gridState.forEach((cell, idx) => {
-    let optionsHtml = ITEMS.map(i => 
-      `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`
-    ).join("");
+  FIXTURE_SECTIONS.forEach((sec, sIdx) => {
+    const card = document.createElement("div");
+    card.className = "fixture-section-edit-card";
+    card.setAttribute("data-cat", sec.category);
 
-    const row = Math.floor(idx / 6) + 1;
-    const col = (idx % 6) + 1;
+    card.innerHTML = `
+      <div class="fixture-edit-header">
+        <input class="ctrl-input" style="font-weight:bold; width:130px;" type="text" id="sec-name-${sIdx}" value="${sec.name}">
+        <select class="ctrl-select" style="width:100px;" id="sec-cat-${sIdx}" onchange="changeSectionCat(${sIdx}, this.value)">
+          <option value="中華まん" ${sec.category === '中華まん' ? 'selected' : ''}>中華まん</option>
+          <option value="ホッターズ" ${sec.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
+          <option value="常温総菜" ${sec.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
+        </select>
+      </div>
 
-    const cellDiv = document.createElement("div");
-    cellDiv.className = "layout-cell-box";
-    cellDiv.innerHTML = `
-      <div class="layout-cell-title">マス #${idx + 1} (${row}段目 - 列${col})</div>
-      <select class="ctrl-select" id="lm-select-${idx}" style="margin-top:6px;">
-        ${optionsHtml}
-      </select>
+      <div class="fixture-config-bar">
+        <label style="font-size:11px; color:#94a3b8;">段(行):</label>
+        <input class="ctrl-input" style="width:50px;" type="number" min="1" max="10" id="sec-rows-${sIdx}" value="${sec.rows}" onchange="resizeFixture(${sIdx})">
+        <label style="font-size:11px; color:#94a3b8;">列:</label>
+        <input class="ctrl-input" style="width:50px;" type="number" min="1" max="12" id="sec-cols-${sIdx}" value="${sec.cols}" onchange="resizeFixture(${sIdx})">
+      </div>
+
+      <div class="fixture-matrix-edit" style="grid-template-columns: repeat(${sec.cols}, 1fr);" id="sec-matrix-${sIdx}"></div>
     `;
-    container.appendChild(cellDiv);
+    container.appendChild(card);
+
+    const matrixEl = card.querySelector(`#sec-matrix-${sIdx}`);
+    sec.cells.forEach((cell, cIdx) => {
+      const r = Math.floor(cIdx / sec.cols) + 1;
+      const c = (cIdx % sec.cols) + 1;
+      const optHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
+
+      const cellBox = document.createElement("div");
+      cellBox.className = "edit-cell-box";
+      cellBox.innerHTML = `
+        <span class="edit-cell-label">${r}段-${c}列</span>
+        <select class="ctrl-select" id="cell-select-${sIdx}-${cIdx}">${optHtml}</select>
+      `;
+      matrixEl.appendChild(cellBox);
+    });
   });
+}
+
+function changeSectionCat(sIdx, newCat) {
+  FIXTURE_SECTIONS[sIdx].category = newCat;
+  renderLayoutMasterEditor();
+}
+
+function resizeFixture(sIdx) {
+  const newRows = parseInt(document.getElementById(`sec-rows-${sIdx}`).value) || 1;
+  const newCols = parseInt(document.getElementById(`sec-cols-${sIdx}`).value) || 1;
+  const totalCells = newRows * newCols;
+
+  const currentCells = FIXTURE_SECTIONS[sIdx].cells;
+  let updatedCells = [];
+
+  for (let i = 0; i < totalCells; i++) {
+    if (i < currentCells.length) {
+      updatedCells.push(currentCells[i]);
+    } else {
+      updatedCells.push({ itemId: 0, stock: 0 });
+    }
+  }
+
+  FIXTURE_SECTIONS[sIdx].rows = newRows;
+  FIXTURE_SECTIONS[sIdx].cols = newCols;
+  FIXTURE_SECTIONS[sIdx].cells = updatedCells;
+
+  renderLayoutMasterEditor();
 }
 
 function saveLayoutMaster() {
-  gridState.forEach((cell, idx) => {
-    const sel = document.getElementById(`lm-select-${idx}`);
-    if (sel) cell.itemId = parseInt(sel.value);
+  FIXTURE_SECTIONS.forEach((sec, sIdx) => {
+    sec.name = document.getElementById(`sec-name-${sIdx}`).value;
+    sec.category = document.getElementById(`sec-cat-${sIdx}`).value;
+    sec.cells.forEach((cell, cIdx) => {
+      const sel = document.getElementById(`cell-select-${sIdx}-${cIdx}`);
+      if (sel) cell.itemId = parseInt(sel.value);
+    });
   });
-  alert("什器レイアウト配置を保存しました！ホーム画面に反映されます。");
+  alert("什器レイアウト設定（行・列構成および分類配置）を保存しました！ホーム画面に反映されます。");
   switchView('home');
 }
 
 setInterval(updateClock, 1000);
 updateClock();
-renderGrid();
+renderHomeFixtures();
 </script>
 </body>
 </html>
