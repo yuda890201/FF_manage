@@ -113,9 +113,7 @@
     color: #38bdf8;
   }
 
-  /* ====================================================
-     上部横配置の廃棄アラートバー
-  ==================================================== */
+  /* 廃棄アラートバー */
   .waste-alert-bar {
     display: flex;
     align-items: center;
@@ -191,7 +189,7 @@
   }
 
   /* ====================================================
-     ホーム画面：什器幅・マス幅の自動調整レイアウト
+     ホーム画面：列数完全連動の均等マトリクス
   ==================================================== */
   .home-fixtures-wrapper {
     display: flex;
@@ -256,7 +254,7 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 3px 5px;
+    padding: 3px 4px;
     min-height: 0;
     transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
@@ -297,27 +295,33 @@
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 #450a0a, 0 2px 3px rgba(0,0,0,0.4);
   }
 
-  /* 上部ボタンの最上部: +調理 */
   .action-top-label {
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 900;
     color: #93c5fd;
     text-align: center;
     line-height: 1;
   }
 
-  /* 商品名（個数と同じぐらいの太字フォント） */
+  /* 商品名コンテナ（全文表示＆自動縮小） */
+  .item-title-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1px 0;
+    overflow: hidden;
+  }
   .item-title-large {
     font-size: 15px;
     font-weight: 900;
     text-shadow: 0 1px 3px rgba(0,0,0,0.7);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     text-align: center;
     color: #ffffff;
     line-height: 1.1;
-    margin: 1px 0;
+    display: inline-block;
+    transform-origin: center center;
   }
 
   .stock-box {
@@ -342,7 +346,7 @@
     font-size: 10px;
     font-weight: 900;
     color: #fca5a5;
-    background: rgba(185, 28, 28, 0.75);
+    background: rgba(185, 28, 28, 0.85);
     padding: 0 4px;
     border-radius: 3px;
     border: 1px solid #ef4444;
@@ -350,9 +354,8 @@
     margin-left: 2px;
   }
 
-  /* 境界近くに配置される最高在庫数・最低在庫数 */
   .boundary-stat-top {
-    font-size: 8.5px;
+    font-size: 8px;
     color: #bfdbfe;
     font-weight: bold;
     text-align: right;
@@ -362,7 +365,7 @@
   .boundary-stat-top span { font-weight: 900; color: #fff; }
 
   .boundary-stat-bottom {
-    font-size: 8.5px;
+    font-size: 8px;
     color: #cbd5e1;
     font-weight: bold;
     text-align: right;
@@ -371,9 +374,8 @@
   }
   .boundary-stat-bottom span { font-weight: 900; color: #fff; }
 
-  /* 下部ボタンの最下部: -販売 */
   .action-bottom-label {
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 900;
     color: #fca5a5;
     text-align: center;
@@ -388,14 +390,14 @@
     display: none !important;
   }
   .cell-capsule.compact .item-title-large {
-    font-size: 12px;
+    font-size: 11px;
     margin: 0;
   }
   .cell-capsule.compact .stock-val {
-    font-size: 16px;
+    font-size: 15px;
   }
   .cell-capsule.compact .capsule-btn {
-    padding: 2px 4px;
+    padding: 2px 3px;
     justify-content: center;
   }
 
@@ -622,14 +624,12 @@
   </div>
 </header>
 
-<!-- ==================== 上部横配置の廃棄アラートバー ==================== -->
+<!-- 廃棄アラートバー -->
 <div class="waste-alert-bar" id="wasteAlertBar">
   <div class="waste-bar-label">
     <span>⚠️ 期限間近</span>
   </div>
-  <div class="waste-items-scroll" id="wasteItemsContainer">
-    <!-- 廃棄アラートアイテムがリアルタイム表示されます -->
-  </div>
+  <div class="waste-items-scroll" id="wasteItemsContainer"></div>
 </div>
 
 <!-- ==================== ホーム画面 ==================== -->
@@ -879,7 +879,6 @@ function updateClock() {
     renderHomeFixtures();
   }
 
-  // リアルタイム廃棄バーの更新
   updateWasteAlertBar();
 }
 
@@ -915,10 +914,6 @@ function getMinRatio(itemId) {
   return SCHEDULE_CONFIG[currentDayType][itemId].minRatio || 0;
 }
 
-function calcFixtureFlex(sec) {
-  return sec.cols * (sec.rows / 3);
-}
-
 // ==================== リアルタイム廃棄アラートバー ====================
 function updateWasteAlertBar() {
   const container = document.getElementById("wasteItemsContainer");
@@ -934,7 +929,6 @@ function updateWasteAlertBar() {
           const elapsed = now - cell.cookTime;
           const remainingMinutes = Math.floor((limitMs - elapsed) / 60000);
 
-          // 残り30分以内、または期限切れ
           if (remainingMinutes <= 30) {
             nearWasteItems.push({
               cellKey: `${sIdx}_${cIdx}`,
@@ -996,6 +990,26 @@ function confirmWaste() {
   closeWasteModal();
 }
 
+// 商品名フォントサイズの自動スケーリング処理（全文表示）
+function autoFitTitles() {
+  document.querySelectorAll('.item-title-wrapper').forEach(wrapper => {
+    const title = wrapper.querySelector('.item-title-large');
+    if (!title) return;
+    
+    // スケールを一旦リセット
+    title.style.transform = 'none';
+    title.style.display = 'inline-block';
+    
+    const availableWidth = wrapper.clientWidth;
+    const textWidth = title.scrollWidth;
+    
+    if (textWidth > availableWidth && availableWidth > 0) {
+      const scale = availableWidth / textWidth;
+      title.style.transform = `scale(${Math.max(scale, 0.6)})`;
+    }
+  });
+}
+
 // ==================== ホーム画面 レンダリング ====================
 function renderHomeFixtures() {
   const container = document.getElementById("homeFixturesWrapper");
@@ -1005,7 +1019,8 @@ function renderHomeFixtures() {
     const secBox = document.createElement("div");
     secBox.className = "fixture-section-container";
     secBox.setAttribute("data-cat", sec.category);
-    secBox.style.flex = `${calcFixtureFlex(sec)} 1 0%`;
+    // 全什器の1列あたりの幅が完全均等になるよう flex: cols 1 0% を指定
+    secBox.style.flex = `${sec.cols} 1 0%`;
 
     secBox.innerHTML = `
       <div class="fixture-grid" style="grid-template-columns: repeat(${sec.cols}, 1fr); grid-template-rows: repeat(${sec.rows}, 1fr);" id="fgrid-${sIdx}"></div>
@@ -1013,7 +1028,7 @@ function renderHomeFixtures() {
     container.appendChild(secBox);
 
     const gridEl = secBox.querySelector(`#fgrid-${sIdx}`);
-    const isCompact = sec.rows >= 5; // 5行以上ならコンパクト表示
+    const isCompact = sec.rows >= 5;
 
     sec.cells.forEach((cell, cIdx) => {
       const cellKey = `${sIdx}_${cIdx}`;
@@ -1021,7 +1036,8 @@ function renderHomeFixtures() {
       const maxQty = getTargetMax(cell.itemId);
       const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
       const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
-      const showRecommend = cell.itemId !== 0 && cell.stock === minQty;
+      // 最低在庫以下（<= minQty）の時に推奨調理数を表示
+      const showRecommend = cell.itemId !== 0 && cell.stock <= minQty;
       const recommendQty = Math.max(0, maxQty - cell.stock);
 
       const capsule = document.createElement("div");
@@ -1032,7 +1048,9 @@ function renderHomeFixtures() {
         <!-- 上ボタン：調理（＋） -->
         <div class="capsule-btn btn-top-cook" onclick="handleTouch('${cellKey}', 'cook')">
           <div class="action-top-label">▲ ＋調理</div>
-          <div class="item-title-large">${item.name}</div>
+          <div class="item-title-wrapper">
+            <div class="item-title-large">${item.name}</div>
+          </div>
           <div class="stock-box">
             <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
             <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
@@ -1054,6 +1072,9 @@ function renderHomeFixtures() {
       updateToastBadges(cellKey);
     });
   });
+
+  // 描画直後に商品名のフォント幅自動調整を実行
+  setTimeout(autoFitTitles, 20);
 }
 
 function handleTouch(cellKey, type) {
@@ -1068,7 +1089,7 @@ function handleTouch(cellKey, type) {
 
   if (type === 'cook') {
     cell.stock++;
-    cell.cookTime = Date.now(); // 調理時間を記録（鮮度管理用）
+    cell.cookTime = Date.now();
     buf.cook++;
     startCommitTimer(cellKey, 'cook');
   } else {
@@ -1134,7 +1155,8 @@ function refreshHomeCell(cellKey) {
   const maxQty = getTargetMax(cell.itemId);
   const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
   const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
-  const showRecommend = cell.itemId !== 0 && cell.stock === minQty;
+  // 最低在庫以下（<= minQty）の時に推奨調理数を表示
+  const showRecommend = cell.itemId !== 0 && cell.stock <= minQty;
   const recommendQty = Math.max(0, maxQty - cell.stock);
 
   const cap = document.getElementById(`capsule-${cellKey}`);
@@ -1229,7 +1251,8 @@ function renderLayoutMasterEditor() {
     const card = document.createElement("div");
     card.className = "fixture-section-edit-card";
     card.setAttribute("data-cat", sec.category);
-    card.style.flex = `${calcFixtureFlex(sec)} 1 0%`;
+    // 配置画面も均等な列幅比率を適用
+    card.style.flex = `${sec.cols} 1 0%`;
 
     card.innerHTML = `
       <div class="fixture-edit-header">
@@ -1309,6 +1332,9 @@ function saveLayoutMaster() {
   alert("什器配置設定を保存しました！ホーム画面に反映されます。");
   switchView('home');
 }
+
+// 画面リサイズ時にも文字フォント幅を再フィット
+window.addEventListener('resize', autoFitTitles);
 
 setInterval(updateClock, 1000);
 updateClock();
