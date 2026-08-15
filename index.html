@@ -520,10 +520,10 @@
 </div>
 
 <script>
-// GASのウェブアプリURL（デプロイ後のURLをここに入力するとスプレッドシートと完全同期）
+// GASのウェブアプリURL
 const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
 
-// ① 店舗マスタ（清川二丁目店、博多住吉通り店をデフォルト設定）
+// ① 店舗マスタ
 let STORE_MASTER = [
   { id: "S001", name: "清川二丁目店", area: "福岡中央", memo: "デフォルト店舗", isCurrent: true },
   { id: "S002", name: "博多住吉通り店", area: "博多", memo: "デフォルト店舗", isCurrent: false }
@@ -536,7 +536,7 @@ let TIME_SLOTS = {
   evening: { label: "夕・夜", startHour: 16 }
 };
 
-// ② 商品マスタ（全店共通）
+// ② 商品マスタ
 let ITEMS = [
   { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
   { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
@@ -681,7 +681,7 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 実績ログのローカル保持＆GASへの非同期自動送信（安定版）
+// 実績ログのローカル保持＆GASへの非同期自動送信
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -715,17 +715,14 @@ function recordArchiveAndSync(itemId, type, qty) {
   };
 
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
-    console.warn("GAS_ENDPOINT_URL が設定されていません。");
+    console.warn("GAS_ENDPOINT_URL が未設定です");
     return;
   }
 
-  // GAS向けに最適化したPOST通信（text/plainで送信）
   fetch(GAS_ENDPOINT_URL, {
     method: "POST",
-    mode: "no-cors", // CORSエラーを回避
-    headers: {
-      "Content-Type": "text/plain" // GASではtext/plainが最も確実
-    },
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ type: "record_log", payload: payloadData })
   })
   .then(() => {
@@ -734,40 +731,6 @@ function recordArchiveAndSync(itemId, type, qty) {
   .catch(err => {
     console.error("GAS送信エラー:", err);
   });
-}
-
-  // 重回帰分析用データレコードの構築
-  const item = ITEMS.find(i => i.id === itemId);
-  const curStore = getCurrentStore();
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  
-  const payloadData = {
-    timestamp: now.toISOString(),
-    date: dateKey,
-    time: timeStr,
-    storeId: curStore.id,
-    storeName: curStore.name,
-    timeSlot: currentScheduleKey,
-    itemId: itemId,
-    itemName: item.name,
-    category: item.category,
-    price: item.price,
-    action: type === 'cook' ? '調理' : (type === 'sell' ? '販売' : '廃棄'),
-    qty: qty,
-    salesAmount: type === 'sell' ? item.price * qty : 0,
-    wasteAmount: type === 'waste' ? item.price * qty : 0
-  };
-
-  // GASへ非同期送信（オフラインでも動作継続）
-  if (GAS_ENDPOINT_URL) {
-    fetch(GAS_ENDPOINT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "record_log", payload: payloadData })
-    }).catch(e => console.log("Sync skipped:", e));
-  }
 }
 
 // 時計＆時間帯自動判定
@@ -781,7 +744,6 @@ function updateClock() {
   document.getElementById("clockDisplay").innerText = 
     `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-  // 編集可能な時間帯スロットに基づく判定
   let newKey = "evening";
   let label = "夕・夜";
   if (h >= TIME_SLOTS.morning.startHour && h < TIME_SLOTS.lunch.startHour) {
@@ -1175,7 +1137,6 @@ function renderScheduleMasterTable() {
 }
 function saveScheduleMaster() {
   const dayType = document.getElementById("scheduleDaySelect").value;
-  // 時間帯スロット更新
   TIME_SLOTS.morning.startHour = parseInt(document.getElementById("slot-morning-start").value) || 6;
   TIME_SLOTS.lunch.startHour = parseInt(document.getElementById("slot-lunch-start").value) || 11;
   TIME_SLOTS.evening.startHour = parseInt(document.getElementById("slot-evening-start").value) || 16;
