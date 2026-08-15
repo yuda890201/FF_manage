@@ -3,146 +3,332 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF什器管理コンソール</title>
+<title>FF仕込み・陳列リアルタイム管理</title>
 <style>
   :root {
-    --bg-color: #f1f5f9;
-    --card-bg: #ffffff;
-    --text-main: #1e293b;
-    --alert-red: #fee2e2;
-    --alert-red-border: #ef4444;
-    --alert-text: #b91c1c;
-    --ok-green-border: #10b981;
-    --primary: #0284c7;
+    --bg-main: #0f172a;
+    --card-bg: #1e293b;
+    --card-border: #334155;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --top-btn-bg: #1e3a5f;
+    --top-btn-active: #2563eb;
+    --bottom-btn-bg: #332729;
+    --bottom-btn-active: #dc2626;
+    --alert-bg: #450a0a;
+    --alert-border: #ef4444;
+    --alert-glow: rgba(239, 68, 68, 0.4);
+    --badge-cook: #22c55e;
+    --badge-sell: #f59e0b;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  body { background: var(--bg-color); color: var(--text-main); padding: 12px; }
 
-  /* ヘッダー */
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #fff; padding: 10px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  h1 { font-size: 18px; font-weight: bold; }
-  .schedule-select { font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", sans-serif;
+  }
 
-  /* 横6 × 縦3 マトリクス */
-  .grid-container {
+  body {
+    background: var(--bg-main);
+    color: var(--text-primary);
+    padding: 8px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ヘッダーエリア */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 6px 14px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    height: 48px;
+  }
+  .header-title {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .time-badge {
+    background: #0284c7;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  .clock {
+    font-size: 17px;
+    font-weight: 700;
+    font-family: "Courier New", monospace;
+    letter-spacing: 1px;
+    color: #38bdf8;
+  }
+  .log-btn {
+    background: #475569;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* 横6 × 縦3 グリッド */
+  .matrix-container {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 8px;
-    height: calc(100vh - 120px);
-    min-height: 500px;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
   }
 
-  /* 各マス */
-  .grid-cell {
+  /* 1マス（セル） */
+  .cell {
     background: var(--card-bg);
-    border: 2px solid #e2e8f0;
+    border: 1.5px solid var(--card-border);
     border-radius: 8px;
-    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  /* 最低陳列数を下回った時の赤ハイライト＆点滅 */
+  .cell.alert {
+    background: var(--alert-bg);
+    border-color: var(--alert-border);
+    box-shadow: 0 0 10px var(--alert-glow);
+    animation: alertPulse 1.8s infinite alternate;
+  }
+  @keyframes alertPulse {
+    0% { border-color: var(--alert-border); }
+    100% { border-color: #f87171; box-shadow: 0 0 16px rgba(248, 113, 113, 0.7); }
+  }
+
+  /* 上部（調理・在庫増）エリア */
+  .cell-top {
+    flex: 1.1;
+    background: linear-gradient(180deg, #1e293b 0%, #172033 100%);
+    border-bottom: 1px dashed var(--card-border);
+    padding: 4px 6px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     cursor: pointer;
-    transition: transform 0.1s, border-color 0.2s;
-    user-select: none;
     position: relative;
+    transition: background 0.1s;
   }
-  .grid-cell:active { transform: scale(0.98); }
-
-  /* 在庫不足アラート（赤ハイライト） */
-  .grid-cell.alert {
-    background-color: var(--alert-red);
-    border-color: var(--alert-red-border);
-    animation: pulse 1.5s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { border-color: var(--alert-red-border); }
-    50% { border-color: #f87171; }
+  .cell-top:active {
+    background: var(--top-btn-active);
   }
 
-  .cell-header { font-size: 12px; color: #64748b; display: flex; justify-content: space-between; align-items: center; }
-  .item-select { font-size: 13px; font-weight: bold; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; margin-top: 2px; }
-
-  .cell-body { text-align: center; margin: 4px 0; }
-  .current-stock { font-size: 28px; font-weight: 800; }
-  .grid-cell.alert .current-stock { color: var(--alert-text); }
-
-  .stock-info { font-size: 11px; color: #64748b; margin-top: 2px; }
-  .stock-info span { font-weight: bold; color: #334155; }
-
-  .cell-footer {
-    background: #f8fafc;
+  .cell-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .item-select {
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #475569;
     border-radius: 4px;
-    padding: 4px;
-    text-align: center;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    max-width: 78%;
+    padding: 1px 2px;
+  }
+  .tap-hint-up {
+    font-size: 10px;
+    color: #38bdf8;
     font-weight: bold;
   }
-  .grid-cell.alert .cell-footer { background: #fecaca; color: var(--alert-text); }
-  .cook-recommend { font-size: 14px; color: #dc2626; }
 
-  /* 入力モーダル */
+  .stock-center {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 4px;
+    margin: 2px 0;
+  }
+  .stock-num {
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+  }
+  .cell.alert .stock-num {
+    color: #fca5a5;
+  }
+  .stock-unit {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* 下部（販売・在庫減・目標数）エリア */
+  .cell-bottom {
+    flex: 0.9;
+    background: linear-gradient(180deg, #182030 0%, #0f172a 100%);
+    padding: 4px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .cell-bottom:active {
+    background: var(--bottom-btn-active);
+  }
+
+  .target-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .target-info span {
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  .recommend-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-top: 2px;
+  }
+  .recommend-label {
+    font-size: 10px;
+    color: #94a3b8;
+  }
+  .recommend-value {
+    font-size: 13px;
+    font-weight: 800;
+    color: #f87171;
+  }
+  .tap-hint-down {
+    font-size: 10px;
+    color: #f87171;
+    font-weight: bold;
+    text-align: right;
+  }
+
+  /* 1分間バッファ（確定待ちタイマー）バッジ */
+  .buffer-badge {
+    position: absolute;
+    right: 4px;
+    top: 24px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+    display: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    z-index: 5;
+  }
+  .buffer-cook { background: var(--badge-cook); }
+  .buffer-sell { background: var(--badge-sell); top: auto; bottom: 22px; }
+
+  /* ログ表示モーダル */
   .modal-overlay {
     display: none;
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.7);
     justify-content: center;
     align-items: center;
     z-index: 100;
   }
-  .modal {
-    background: #fff;
-    padding: 20px;
-    border-radius: 12px;
-    width: 320px;
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  .modal-content {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
   }
-  .modal-title { font-size: 18px; margin-bottom: 15px; font-weight: bold; }
-  .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-  .btn { padding: 12px; font-size: 15px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
-  .btn-cook { background: #22c55e; color: #fff; }
-  .btn-sell { background: #3b82f6; color: #fff; }
-  .btn-cancel { background: #94a3b8; color: #fff; grid-column: span 2; margin-top: 5px; }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .log-list {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 12px;
+    list-style: none;
+  }
+  .log-item {
+    padding: 6px 4px;
+    border-bottom: 1px solid #334155;
+    display: flex;
+    justify-content: space-between;
+  }
+  .log-cook { color: #4ade80; }
+  .log-sell { color: #fbbf24; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🏪 FF什器仕込み・在庫管理</h1>
-  <div>
-    <label>時間帯: </label>
-    <select id="timeSchedule" class="schedule-select" onchange="updateSchedule()">
-      <option value="morning">朝 (6:00〜)</option>
-      <option value="lunch" selected>昼 (11:00〜)</option>
-      <option value="evening">夕方 (16:00〜)</option>
-    </select>
+  <div class="header-title">
+    <span>🏪 FF什器仕込みコンソール</span>
+  </div>
+  <div class="header-info">
+    <div id="scheduleBadge" class="time-badge">昼 (11:00〜)</div>
+    <div id="clockDisplay" class="clock">--:--:--</div>
+    <button class="log-btn" onclick="openLogModal()">確定履歴</button>
   </div>
 </header>
 
-<!-- 横6 × 縦3 のマトリクス -->
-<div class="grid-container" id="matrixGrid"></div>
+<div class="matrix-container" id="matrixGrid"></div>
 
-<!-- 調理・販売入力ポップアップ -->
-<div class="modal-overlay" id="inputModal">
-  <div class="modal">
-    <div class="modal-title" id="modalItemName">商品名</div>
-    <div style="font-size: 14px; margin-bottom: 12px;">現在陳列数: <span id="modalCurrentStock" style="font-weight:bold; font-size:18px;"></span> 個</div>
-    <div class="modal-actions">
-      <button class="btn btn-cook" onclick="addCook(1)">＋ 調理 1個</button>
-      <button class="btn btn-cook" onclick="addCook(4)">＋ 調理 4個</button>
-      <button class="btn btn-sell" onclick="addSell(1)">− 販売 1個</button>
-      <button class="btn btn-sell" onclick="addSell(2)">− 販売 2個</button>
-      <button class="btn btn-cancel" onclick="closeModal()">閉じる</button>
+<!-- 確定ログ確認モーダル -->
+<div class="modal-overlay" id="logModal" onclick="closeLogModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span>1分タイマー確定 履歴一覧</span>
+      <button class="log-btn" onclick="closeLogModal()">✕</button>
     </div>
+    <ul class="log-list" id="logList">
+      <li class="log-item" style="color:#64748b;">確定された記録はここに表示されます</li>
+    </ul>
   </div>
 </div>
 
 <script>
-// マスターデータ定義（清川店の平日データ参考）
+// マスターデータ（時間帯別 最高陳列数）
 const ITEMS = [
-  { id: 0, name: "（空き）", max: 0, min: 0 },
+  { id: 0, name: "（空き）", morningMax: 0, lunchMax: 0, eveningMax: 0, minRatio: 0 },
   { id: 1, name: "ファミチキ", morningMax: 8, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
   { id: 2, name: "ファミチキレッド", morningMax: 6, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
   { id: 3, name: "クリスピー", morningMax: 3, lunchMax: 4, eveningMax: 3, minRatio: 0.5 },
@@ -150,108 +336,285 @@ const ITEMS = [
   { id: 5, name: "山賊焼", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
   { id: 6, name: "ころじゃが", morningMax: 4, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
   { id: 7, name: "ハッシュドポテト", morningMax: 2, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
-  { id: 8, name: "肉まん", morningMax: 5, lunchMax: 5, eveningMax: 16, minRatio: 0.3 },
-  { id: 9, name: "ももタレ", morningMax: 3, lunchMax: 4, eveningMax: 5, minRatio: 0.5 },
-  { id: 10, name: "かわタレ", morningMax: 4, lunchMax: 4, eveningMax: 6, minRatio: 0.5 }
+  { id: 8, name: "ファミコロ", morningMax: 1, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
+  { id: 9, name: "黒豚まん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
+  { id: 10, name: "肉まん", morningMax: 5, lunchMax: 5, eveningMax: 16, minRatio: 0.3 },
+  { id: 11, name: "ピザまん", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.3 },
+  { id: 12, name: "あんまん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
+  { id: 13, name: "ももタレ", morningMax: 3, lunchMax: 4, eveningMax: 5, minRatio: 0.5 },
+  { id: 14, name: "かわタレ", morningMax: 4, lunchMax: 4, eveningMax: 6, minRatio: 0.5 },
+  { id: 15, name: "もも塩", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
+  { id: 16, name: "かわ塩", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
+  { id: 17, name: "ジャンボフランク", morningMax: 2, lunchMax: 2, eveningMax: 3, minRatio: 0.5 }
 ];
 
-// 6列 × 3行 = 18マス の初期状態
+// 初期グリッド設定（18マス）
 let gridState = Array(18).fill(null).map((_, index) => {
   return {
     cellId: index,
-    itemId: index < 10 ? index + 1 : 0, // 初期配置
-    currentStock: Math.floor(Math.random() * 4) // デモ用初期在庫
+    itemId: index < 17 ? index + 1 : 0,
+    currentStock: 4,
+    // 1分確定バッファ
+    cookBuffer: 0,
+    cookTimer: null,
+    cookRemainingSec: 0,
+    sellBuffer: 0,
+    sellTimer: null,
+    sellRemainingSec: 0
   };
 });
 
-let currentSchedule = "lunch";
-let activeCellIndex = null;
+let currentScheduleKey = "lunch";
+let commitLogs = [];
 
-// グリッドの描画
+// 1. リアルタイム時計 & スケジュール自動判定
+function updateClock() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+
+  document.getElementById("clockDisplay").innerText = 
+    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+  // 時間帯の自動判定 (朝 6:00~, 昼 11:00~, 夕方 16:00~)
+  let newScheduleKey = "evening";
+  let label = "夕方・夜 (16:00〜)";
+
+  if (hours >= 6 && hours < 11) {
+    newScheduleKey = "morning";
+    label = "朝 (6:00〜)";
+  } else if (hours >= 11 && hours < 16) {
+    newScheduleKey = "lunch";
+    label = "昼 (11:00〜)";
+  }
+
+  const badge = document.getElementById("scheduleBadge");
+  if (badge.innerText !== label) {
+    badge.innerText = label;
+  }
+
+  if (currentScheduleKey !== newScheduleKey) {
+    currentScheduleKey = newScheduleKey;
+    renderGrid();
+  }
+}
+
+// 2. グリッド描画
 function renderGrid() {
   const container = document.getElementById("matrixGrid");
   container.innerHTML = "";
 
   gridState.forEach((cell, idx) => {
     const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
-    const maxQty = item[`${currentSchedule}Max`] || 0;
-    const minQty = Math.ceil(maxQty * (item.minRatio || 0.4));
+    const maxQty = item[`${currentScheduleKey}Max`] || 0;
+    const minQty = Math.ceil(maxQty * (item.minRatio || 0));
     const recommendQty = Math.max(0, maxQty - cell.currentStock);
     const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
 
     const cellDiv = document.createElement("div");
-    cellDiv.className = `grid-cell ${isAlert ? 'alert' : ''}`;
-    cellDiv.onclick = (e) => {
-      if (e.target.tagName !== 'SELECT') openModal(idx);
-    };
+    cellDiv.className = `cell ${isAlert ? 'alert' : ''}`;
+    cellDiv.id = `cell-${idx}`;
 
-    // セレクトボックスのHTML
-    let optionsHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
+    // 商品選択肢
+    let optionsHtml = ITEMS.map(i => 
+      `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`
+    ).join("");
 
     cellDiv.innerHTML = `
-      <div class="cell-header">
-        <span>#${idx + 1}</span>
-        <select class="item-select" onchange="changeItem(${idx}, this.value)">
-          ${optionsHtml}
-        </select>
+      <!-- 上半分：在庫増加 & 調理 -->
+      <div class="cell-top" onclick="handleCellTouch(${idx}, 'cook')">
+        <div class="cell-header-row">
+          <select class="item-select" onchange="changeItem(${idx}, this.value)" onclick="event.stopPropagation()">
+            ${optionsHtml}
+          </select>
+          <span class="tap-hint-up">▲ ＋1調理</span>
+        </div>
+        <div class="stock-center">
+          <div class="stock-num">${cell.itemId === 0 ? '-' : cell.currentStock}</div>
+          <div class="stock-unit">${cell.itemId === 0 ? '' : '個'}</div>
+        </div>
+        <div class="buffer-badge buffer-cook" id="cook-badge-${idx}"></div>
       </div>
-      <div class="cell-body">
-        <div class="current-stock">${cell.itemId === 0 ? '-' : cell.currentStock}</div>
-        <div class="stock-info">最高: <span>${maxQty}</span> | 最低: <span>${minQty}</span></div>
-      </div>
-      <div class="cell-footer">
-        ${cell.itemId === 0 ? '未設定' : `推奨調理: <span class="cook-recommend">${recommendQty}</span> 個`}
+
+      <!-- 下半分：在庫減少 & 販売・目標値 -->
+      <div class="cell-bottom" onclick="handleCellTouch(${idx}, 'sell')">
+        <div class="target-info">
+          <div>最高: <span>${maxQty}</span></div>
+          <div>最低: <span>${minQty}</span></div>
+        </div>
+        <div class="recommend-row">
+          <span class="recommend-label">推奨作成</span>
+          <span class="recommend-value">${cell.itemId === 0 ? '-' : recommendQty + ' 個'}</span>
+        </div>
+        <div class="tap-hint-down">▼ −1販売</div>
+        <div class="buffer-badge buffer-sell" id="sell-badge-${idx}"></div>
       </div>
     `;
 
     container.appendChild(cellDiv);
+    updateBadges(idx);
   });
 }
 
-function changeItem(cellIndex, newItemId) {
-  gridState[cellIndex].itemId = parseInt(newItemId);
-  renderGrid();
-}
-
-function updateSchedule() {
-  currentSchedule = document.getElementById("timeSchedule").value;
-  renderGrid();
-}
-
-// モーダル操作
-function openModal(index) {
-  activeCellIndex = index;
+// 3. タッチ処理（上部：調理増 / 下部：販売減）
+function handleCellTouch(index, type) {
   const cell = gridState[index];
-  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
   if (cell.itemId === 0) return;
 
-  document.getElementById("modalItemName").innerText = item.name;
-  document.getElementById("modalCurrentStock").innerText = cell.currentStock;
-  document.getElementById("inputModal").style.display = "flex";
+  if (type === 'cook') {
+    // 即時在庫+1
+    cell.currentStock++;
+    cell.cookBuffer++;
+    startCommitTimer(index, 'cook');
+  } else if (type === 'sell') {
+    // 即時在庫-1 (0未満にはしない)
+    if (cell.currentStock > 0) {
+      cell.currentStock--;
+      cell.sellBuffer++;
+      startCommitTimer(index, 'sell');
+    }
+  }
+
+  // 画面の数値更新
+  refreshCellView(index);
 }
 
-function closeModal() {
-  document.getElementById("inputModal").style.display = "none";
-  activeCellIndex = null;
+// 4. 1分間バッファタイマー（1分以内に連続タップされた分をまとめて確定）
+function startCommitTimer(index, type) {
+  const cell = gridState[index];
+
+  if (type === 'cook') {
+    if (cell.cookTimer) clearInterval(cell.cookTimer);
+    cell.cookRemainingSec = 60;
+
+    cell.cookTimer = setInterval(() => {
+      cell.cookRemainingSec--;
+      if (cell.cookRemainingSec <= 0) {
+        clearInterval(cell.cookTimer);
+        cell.cookTimer = null;
+        commitTransaction(index, '調理', cell.cookBuffer);
+        cell.cookBuffer = 0;
+      }
+      updateBadges(index);
+    }, 1000);
+  } else if (type === 'sell') {
+    if (cell.sellTimer) clearInterval(cell.sellTimer);
+    cell.sellRemainingSec = 60;
+
+    cell.sellTimer = setInterval(() => {
+      cell.sellRemainingSec--;
+      if (cell.sellRemainingSec <= 0) {
+        clearInterval(cell.sellTimer);
+        cell.sellTimer = null;
+        commitTransaction(index, '販売', cell.sellBuffer);
+        cell.sellBuffer = 0;
+      }
+      updateBadges(index);
+    }, 1000);
+  }
+
+  updateBadges(index);
 }
 
-function addCook(qty) {
-  if (activeCellIndex !== null) {
-    gridState[activeCellIndex].currentStock += qty;
-    renderGrid();
-    closeModal();
+// バッジ表示更新
+function updateBadges(index) {
+  const cell = gridState[index];
+  const cookBadge = document.getElementById(`cook-badge-${index}`);
+  const sellBadge = document.getElementById(`sell-badge-${index}`);
+
+  if (cookBadge) {
+    if (cell.cookBuffer > 0) {
+      cookBadge.style.display = 'block';
+      cookBadge.innerText = `+${cell.cookBuffer} 調理 (${cell.cookRemainingSec}s)`;
+    } else {
+      cookBadge.style.display = 'none';
+    }
+  }
+
+  if (sellBadge) {
+    if (cell.sellBuffer > 0) {
+      sellBadge.style.display = 'block';
+      sellBadge.innerText = `-${cell.sellBuffer} 販売 (${cell.sellRemainingSec}s)`;
+    } else {
+      sellBadge.style.display = 'none';
+    }
   }
 }
 
-function addSell(qty) {
-  if (activeCellIndex !== null) {
-    gridState[activeCellIndex].currentStock = Math.max(0, gridState[activeCellIndex].currentStock - qty);
-    renderGrid();
-    closeModal();
-  }
+// 確定ログの記録
+function commitTransaction(index, actionName, qty) {
+  if (qty <= 0) return;
+  const cell = gridState[index];
+  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const logEntry = {
+    time: timeStr,
+    itemName: item.name,
+    action: actionName,
+    qty: qty
+  };
+  commitLogs.unshift(logEntry);
+  updateLogListUI();
 }
 
-// 初回起動
+// 個別セルのDOM更新（軽量更新）
+function refreshCellView(index) {
+  const cell = gridState[index];
+  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+  const maxQty = item[`${currentScheduleKey}Max`] || 0;
+  const minQty = Math.ceil(maxQty * (item.minRatio || 0));
+  const recommendQty = Math.max(0, maxQty - cell.currentStock);
+  const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
+
+  const cellDiv = document.getElementById(`cell-${index}`);
+  if (!cellDiv) return;
+
+  if (isAlert) {
+    cellDiv.classList.add('alert');
+  } else {
+    cellDiv.classList.remove('alert');
+  }
+
+  const stockNum = cellDiv.querySelector('.stock-num');
+  if (stockNum) stockNum.innerText = cell.itemId === 0 ? '-' : cell.currentStock;
+
+  const recValue = cellDiv.querySelector('.recommend-value');
+  if (recValue) recValue.innerText = cell.itemId === 0 ? '-' : recommendQty + ' 個';
+
+  updateBadges(index);
+}
+
+function changeItem(index, newItemId) {
+  gridState[index].itemId = parseInt(newItemId);
+  renderGrid();
+}
+
+// ログモーダル操作
+function openLogModal() {
+  document.getElementById("logModal").style.display = "flex";
+}
+function closeLogModal() {
+  document.getElementById("logModal").style.display = "none";
+}
+function updateLogListUI() {
+  const logList = document.getElementById("logList");
+  if (commitLogs.length === 0) return;
+  logList.innerHTML = commitLogs.slice(0, 30).map(log => `
+    <li class="log-item">
+      <span>[${log.time}] <b>${log.itemName}</b></span>
+      <span class="${log.action === '調理' ? 'log-cook' : 'log-sell'}">
+        ${log.action} +${log.qty}個 確定
+      </span>
+    </li>
+  `).join("");
+}
+
+// 起動
+setInterval(updateClock, 1000);
+updateClock();
 renderGrid();
 </script>
 
