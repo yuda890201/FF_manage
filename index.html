@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF什器仕込み・在庫管理</title>
+<title>FF什器管理</title>
 <style>
   :root {
     --bg-main: #0a0f1d;
@@ -55,20 +55,15 @@
     align-items: center;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 10px;
     margin-bottom: 8px;
-    height: 48px;
+    height: 44px;
     flex-shrink: 0;
   }
   .header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
-  }
-  .header-title {
-    font-size: 15px;
-    font-weight: 800;
   }
   .nav-tabs {
     display: flex;
@@ -82,7 +77,7 @@
     background: transparent;
     border: none;
     color: #94a3b8;
-    padding: 5px 12px;
+    padding: 5px 14px;
     border-radius: 6px;
     font-size: 12px;
     font-weight: bold;
@@ -97,7 +92,7 @@
   .header-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
   .day-badge {
     background: #475569;
@@ -116,7 +111,7 @@
     font-size: 12px;
   }
   .clock {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
     font-family: "Courier New", monospace;
     color: #38bdf8;
@@ -138,7 +133,7 @@
   ==================================================== */
   .home-fixtures-wrapper {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     flex: 1;
     min-height: 0;
     width: 100%;
@@ -149,8 +144,8 @@
     display: flex;
     flex-direction: column;
     background: #0b1120;
-    border-radius: 12px;
-    padding: 6px;
+    border-radius: 10px;
+    padding: 4px;
     border: 2px solid #334155;
     min-width: 0;
     height: 100%;
@@ -161,30 +156,9 @@
   .fixture-section-container[data-cat="ホッターズ"] { border-color: #3b82f6; box-shadow: inset 0 0 8px rgba(59,130,246,0.15); }
   .fixture-section-container[data-cat="常温総菜"] { border-color: #10b981; box-shadow: inset 0 0 8px rgba(16,185,129,0.15); }
 
-  .fixture-section-header {
-    font-size: 11px;
-    font-weight: 800;
-    padding: 2px 4px 6px 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: #94a3b8;
-    flex-shrink: 0;
-  }
-  .fixture-section-header span.cat-badge {
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: bold;
-    color: #fff;
-  }
-  .cat-badge-中華まん { background: #ea580c; }
-  .cat-badge-ホッターズ { background: #2563eb; }
-  .cat-badge-常温総菜 { background: #059669; }
-
   .fixture-grid {
     display: grid;
-    gap: 6px;
+    gap: 5px;
     flex: 1;
     min-height: 0;
     height: 100%;
@@ -228,7 +202,7 @@
   .capsule-btn:hover { filter: brightness(1.1); }
 
   .btn-top-cook {
-    flex: 1.15;
+    flex: 1.2;
     background: linear-gradient(180deg, var(--btn-cook-top) 0%, var(--btn-cook-bottom) 100%);
     box-shadow: 
       inset 0 1.5px 2px rgba(255, 255, 255, 0.5),
@@ -245,7 +219,7 @@
   }
 
   .btn-bottom-sell {
-    flex: 0.85;
+    flex: 0.8;
     background: linear-gradient(180deg, var(--btn-sell-top) 0%, var(--btn-sell-bottom) 100%);
     box-shadow: 
       inset 0 1.5px 2px rgba(255, 255, 255, 0.2),
@@ -262,21 +236,98 @@
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 #450a0a, 0 2px 3px rgba(0,0,0,0.4);
   }
 
-  .cell-header-line { display: flex; justify-content: space-between; align-items: center; }
-  .item-title { font-size: 11px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 68%; }
-  .action-pill-up { font-size: 8.5px; font-weight: 800; background: rgba(255, 255, 255, 0.25); color: #fff; padding: 1px 4px; border-radius: 6px; white-space: nowrap; }
+  .cell-top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .item-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 65%;
+  }
+  .stat-max {
+    font-size: 9px;
+    color: #bfdbfe;
+    font-weight: bold;
+  }
+  .stat-max span {
+    font-weight: 900;
+    color: #ffffff;
+  }
 
-  .stock-box { display: flex; justify-content: center; align-items: baseline; gap: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
-  .stock-val { font-size: 21px; font-weight: 900; line-height: 1; color: #fff; }
-  .stock-unit { font-size: 9.5px; font-weight: bold; color: #bfdbfe; }
+  .action-row-up {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: -1px;
+  }
+  .action-pill-up {
+    font-size: 8px;
+    font-weight: 800;
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    padding: 0px 4px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
 
-  .target-line { display: flex; justify-content: space-between; font-size: 8.5px; color: #94a3b8; }
-  .target-line span { font-weight: 800; color: #e2e8f0; }
+  .stock-box {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 3px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  }
+  .stock-val {
+    font-size: 21px;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+  }
+  .stock-unit {
+    font-size: 9px;
+    font-weight: bold;
+    color: #bfdbfe;
+  }
+  .rec-inline {
+    font-size: 10px;
+    font-weight: 900;
+    color: #fca5a5;
+    background: rgba(185, 28, 28, 0.7);
+    padding: 0 4px;
+    border-radius: 3px;
+    border: 1px solid #ef4444;
+    display: none;
+    margin-left: 2px;
+  }
 
-  .sell-action-line { display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.35); padding: 1px 4px; border-radius: 3px; }
-  .rec-label { font-size: 8.5px; color: #94a3b8; }
-  .rec-val { font-size: 10.5px; font-weight: 900; color: #f87171; }
-  .action-pill-down { font-size: 8px; font-weight: 800; background: #475569; color: #cbd5e1; padding: 1px 3px; border-radius: 3px; white-space: nowrap; }
+  .cell-bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .stat-min {
+    font-size: 9px;
+    color: #94a3b8;
+    font-weight: bold;
+  }
+  .stat-min span {
+    font-weight: 900;
+    color: #f1f5f9;
+  }
+  .action-pill-down {
+    font-size: 8px;
+    font-weight: 800;
+    background: #475569;
+    color: #cbd5e1;
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
 
   .badge-toast { position: absolute; right: 4px; top: 16px; padding: 1px 5px; border-radius: 8px; font-size: 8.5px; font-weight: 900; color: #fff; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.6); z-index: 10; }
   .toast-cook { background: #10b981; border: 1px solid #34d399; }
@@ -445,7 +496,6 @@
 
 <header>
   <div class="header-left">
-    <div class="header-title">🏪 FF仕込み・在庫管理</div>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchView('home')">ホーム</button>
       <button class="nav-tab" onclick="switchView('itemMaster')">① 商品マスタ</button>
@@ -640,9 +690,7 @@ let FIXTURE_SECTIONS = [
   }
 ];
 
-// バッファ管理
 let cellBuffers = {};
-
 let currentScheduleKey = "lunch";
 let currentDayType = "weekday";
 
@@ -694,7 +742,6 @@ function switchView(viewName) {
   }
 }
 
-// ==================== ホーム画面 レンダリング ====================
 function getTargetMax(itemId) {
   if (itemId === 0 || !SCHEDULE_CONFIG[currentDayType][itemId]) return 0;
   return SCHEDULE_CONFIG[currentDayType][itemId][currentScheduleKey] || 0;
@@ -704,11 +751,11 @@ function getMinRatio(itemId) {
   return SCHEDULE_CONFIG[currentDayType][itemId].minRatio || 0;
 }
 
-// 行数・列数に応じた動的flex幅計算（行が多い什器のマス幅を広く自動配分）
 function calcFixtureFlex(sec) {
   return sec.cols * (sec.rows / 3);
 }
 
+// ==================== ホーム画面 レンダリング ====================
 function renderHomeFixtures() {
   const container = document.getElementById("homeFixturesWrapper");
   container.innerHTML = "";
@@ -720,10 +767,6 @@ function renderHomeFixtures() {
     secBox.style.flex = `${calcFixtureFlex(sec)} 1 0%`;
 
     secBox.innerHTML = `
-      <div class="fixture-section-header">
-        <span>${sec.name} (${sec.rows}段×${sec.cols}列)</span>
-        <span class="cat-badge cat-badge-${sec.category}">${sec.category}</span>
-      </div>
       <div class="fixture-grid" style="grid-template-columns: repeat(${sec.cols}, 1fr); grid-template-rows: repeat(${sec.rows}, 1fr);" id="fgrid-${sIdx}"></div>
     `;
     container.appendChild(secBox);
@@ -734,36 +777,36 @@ function renderHomeFixtures() {
       const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
       const maxQty = getTargetMax(cell.itemId);
       const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
-      const recommendQty = Math.max(0, maxQty - cell.stock);
       const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
+      const showRecommend = cell.itemId !== 0 && cell.stock === minQty;
+      const recommendQty = Math.max(0, maxQty - cell.stock);
 
       const capsule = document.createElement("div");
       capsule.className = `cell-capsule ${isAlert ? 'alert' : ''}`;
       capsule.id = `capsule-${cellKey}`;
 
       capsule.innerHTML = `
+        <!-- 上ボタン：調理（＋）＆ 最高在庫数表示 -->
         <div class="capsule-btn btn-top-cook" onclick="handleTouch('${cellKey}', 'cook')">
-          <div class="cell-header-line">
+          <div class="cell-top-header">
             <span class="item-title">${item.name}</span>
+            <div class="stat-max">最高: <span>${cell.itemId === 0 ? '-' : maxQty}</span></div>
+          </div>
+          <div class="action-row-up">
             <span class="action-pill-up">＋調理</span>
           </div>
           <div class="stock-box">
             <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
             <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
+            <span class="rec-inline" id="rec-${cellKey}" style="display: ${showRecommend ? 'inline-block' : 'none'};">+${recommendQty}</span>
           </div>
           <div class="badge-toast toast-cook" id="cook-badge-${cellKey}"></div>
         </div>
 
+        <!-- 下ボタン：販売（−）＆ 最低在庫数表示 -->
         <div class="capsule-btn btn-bottom-sell" onclick="handleTouch('${cellKey}', 'sell')">
-          <div class="target-line">
-            <div>最高: <span>${maxQty}</span></div>
-            <div>最低: <span>${minQty}</span></div>
-          </div>
-          <div class="sell-action-line">
-            <div>
-              <span class="rec-label">推奨: </span>
-              <span class="rec-val">${cell.itemId === 0 ? '-' : recommendQty + '個'}</span>
-            </div>
+          <div class="cell-bottom-row">
+            <div class="stat-min">最低: <span>${cell.itemId === 0 ? '-' : minQty}</span></div>
             <span class="action-pill-down">−販売</span>
           </div>
           <div class="badge-toast toast-sell" id="sell-badge-${cellKey}"></div>
@@ -851,8 +894,9 @@ function refreshHomeCell(cellKey) {
   const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
   const maxQty = getTargetMax(cell.itemId);
   const minQty = Math.ceil(maxQty * getMinRatio(cell.itemId));
-  const recommendQty = Math.max(0, maxQty - cell.stock);
   const isAlert = cell.itemId !== 0 && cell.stock <= minQty;
+  const showRecommend = cell.itemId !== 0 && cell.stock === minQty;
+  const recommendQty = Math.max(0, maxQty - cell.stock);
 
   const cap = document.getElementById(`capsule-${cellKey}`);
   if (!cap) return;
@@ -861,7 +905,13 @@ function refreshHomeCell(cellKey) {
   else cap.classList.remove('alert');
 
   cap.querySelector('.stock-val').innerText = cell.itemId === 0 ? '-' : cell.stock;
-  cap.querySelector('.rec-val').innerText = cell.itemId === 0 ? '-' : recommendQty + '個';
+  
+  const recEl = document.getElementById(`rec-${cellKey}`);
+  if (recEl) {
+    recEl.style.display = showRecommend ? 'inline-block' : 'none';
+    recEl.innerText = `+${recommendQty}`;
+  }
+
   updateToastBadges(cellKey);
 }
 
