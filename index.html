@@ -520,11 +520,10 @@
 // GASのウェブアプリURL（デプロイ後のURLをここに入力するとスプレッドシートと完全同期）
 const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
 
-// ① 店舗マスタ
+// ① 店舗マスタ（清川二丁目店、博多住吉通り店をデフォルト設定）
 let STORE_MASTER = [
-  { id: "S001", name: "清川二丁目店", area: "福岡中央", memo: "住宅", isCurrent: true },
-  { id: "S002", name: "博多住吉通り店", area: "博多", memo: "オフィス", isCurrent: false },
-  { id: "S003", name: "3号店", area: "博多", memo: "ロード", isCurrent: false }
+  { id: "S001", name: "清川二丁目店", area: "福岡中央", memo: "デフォルト店舗", isCurrent: true },
+  { id: "S002", name: "博多住吉通り店", area: "博多", memo: "デフォルト店舗", isCurrent: false }
 ];
 
 // 時間帯スケジュールスロット定義
