@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FF什器管理コンソール</title>
+<style>
+  :root {
+    --bg-color: #f1f5f9;
+    --card-bg: #ffffff;
+    --text-main: #1e293b;
+    --alert-red: #fee2e2;
+    --alert-red-border: #ef4444;
+    --alert-text: #b91c1c;
+    --ok-green-border: #10b981;
+    --primary: #0284c7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: var(--bg-color); color: var(--text-main); padding: 12px; }
+
+  /* ヘッダー */
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #fff; padding: 10px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  h1 { font-size: 18px; font-weight: bold; }
+  .schedule-select { font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; }
+
+  /* 横6 × 縦3 マトリクス */
+  .grid-container {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+    height: calc(100vh - 120px);
+    min-height: 500px;
+  }
+
+  /* 各マス */
+  .grid-cell {
+    background: var(--card-bg);
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.2s;
+    user-select: none;
+    position: relative;
+  }
+  .grid-cell:active { transform: scale(0.98); }
+
+  /* 在庫不足アラート（赤ハイライト） */
+  .grid-cell.alert {
+    background-color: var(--alert-red);
+    border-color: var(--alert-red-border);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { border-color: var(--alert-red-border); }
+    50% { border-color: #f87171; }
+  }
+
+  .cell-header { font-size: 12px; color: #64748b; display: flex; justify-content: space-between; align-items: center; }
+  .item-select { font-size: 13px; font-weight: bold; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; margin-top: 2px; }
+
+  .cell-body { text-align: center; margin: 4px 0; }
+  .current-stock { font-size: 28px; font-weight: 800; }
+  .grid-cell.alert .current-stock { color: var(--alert-text); }
+
+  .stock-info { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .stock-info span { font-weight: bold; color: #334155; }
+
+  .cell-footer {
+    background: #f8fafc;
+    border-radius: 4px;
+    padding: 4px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  .grid-cell.alert .cell-footer { background: #fecaca; color: var(--alert-text); }
+  .cook-recommend { font-size: 14px; color: #dc2626; }
+
+  /* 入力モーダル */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  .modal {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    width: 320px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .modal-title { font-size: 18px; margin-bottom: 15px; font-weight: bold; }
+  .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+  .btn { padding: 12px; font-size: 15px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+  .btn-cook { background: #22c55e; color: #fff; }
+  .btn-sell { background: #3b82f6; color: #fff; }
+  .btn-cancel { background: #94a3b8; color: #fff; grid-column: span 2; margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏪 FF什器仕込み・在庫管理</h1>
+  <div>
+    <label>時間帯: </label>
+    <select id="timeSchedule" class="schedule-select" onchange="updateSchedule()">
+      <option value="morning">朝 (6:00〜)</option>
+      <option value="lunch" selected>昼 (11:00〜)</option>
+      <option value="evening">夕方 (16:00〜)</option>
+    </select>
+  </div>
+</header>
+
+<!-- 横6 × 縦3 のマトリクス -->
+<div class="grid-container" id="matrixGrid"></div>
+
+<!-- 調理・販売入力ポップアップ -->
+<div class="modal-overlay" id="inputModal">
+  <div class="modal">
+    <div class="modal-title" id="modalItemName">商品名</div>
+    <div style="font-size: 14px; margin-bottom: 12px;">現在陳列数: <span id="modalCurrentStock" style="font-weight:bold; font-size:18px;"></span> 個</div>
+    <div class="modal-actions">
+      <button class="btn btn-cook" onclick="addCook(1)">＋ 調理 1個</button>
+      <button class="btn btn-cook" onclick="addCook(4)">＋ 調理 4個</button>
+      <button class="btn btn-sell" onclick="addSell(1)">− 販売 1個</button>
+      <button class="btn btn-sell" onclick="addSell(2)">− 販売 2個</button>
+      <button class="btn btn-cancel" onclick="closeModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// マスターデータ定義（清川店の平日データ参考）
+const ITEMS = [
+  { id: 0, name: "（空き）", max: 0, min: 0 },
+  { id: 1, name: "ファミチキ", morningMax: 8, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
+  { id: 2, name: "ファミチキレッド", morningMax: 6, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
+  { id: 3, name: "クリスピー", morningMax: 3, lunchMax: 4, eveningMax: 3, minRatio: 0.5 },
+  { id: 4, name: "スパイシー", morningMax: 2, lunchMax: 4, eveningMax: 2, minRatio: 0.5 },
+  { id: 5, name: "山賊焼", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
+  { id: 6, name: "ころじゃが", morningMax: 4, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
+  { id: 7, name: "ハッシュドポテト", morningMax: 2, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
+  { id: 8, name: "肉まん", morningMax: 5, lunchMax: 5, eveningMax: 16, minRatio: 0.3 },
+  { id: 9, name: "ももタレ", morningMax: 3, lunchMax: 4, eveningMax: 5, minRatio: 0.5 },
+  { id: 10, name: "かわタレ", morningMax: 4, lunchMax: 4, eveningMax: 6, minRatio: 0.5 }
+];
+
+// 6列 × 3行 = 18マス の初期状態
+let gridState = Array(18).fill(null).map((_, index) => {
+  return {
+    cellId: index,
+    itemId: index < 10 ? index + 1 : 0, // 初期配置
+    currentStock: Math.floor(Math.random() * 4) // デモ用初期在庫
+  };
+});
+
+let currentSchedule = "lunch";
+let activeCellIndex = null;
+
+// グリッドの描画
+function renderGrid() {
+  const container = document.getElementById("matrixGrid");
+  container.innerHTML = "";
+
+  gridState.forEach((cell, idx) => {
+    const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+    const maxQty = item[`${currentSchedule}Max`] || 0;
+    const minQty = Math.ceil(maxQty * (item.minRatio || 0.4));
+    const recommendQty = Math.max(0, maxQty - cell.currentStock);
+    const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
+
+    const cellDiv = document.createElement("div");
+    cellDiv.className = `grid-cell ${isAlert ? 'alert' : ''}`;
+    cellDiv.onclick = (e) => {
+      if (e.target.tagName !== 'SELECT') openModal(idx);
+    };
+
+    // セレクトボックスのHTML
+    let optionsHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
+
+    cellDiv.innerHTML = `
+      <div class="cell-header">
+        <span>#${idx + 1}</span>
+        <select class="item-select" onchange="changeItem(${idx}, this.value)">
+          ${optionsHtml}
+        </select>
+      </div>
+      <div class="cell-body">
+        <div class="current-stock">${cell.itemId === 0 ? '-' : cell.currentStock}</div>
+        <div class="stock-info">最高: <span>${maxQty}</span> | 最低: <span>${minQty}</span></div>
+      </div>
+      <div class="cell-footer">
+        ${cell.itemId === 0 ? '未設定' : `推奨調理: <span class="cook-recommend">${recommendQty}</span> 個`}
+      </div>
+    `;
+
+    container.appendChild(cellDiv);
+  });
+}
+
+function changeItem(cellIndex, newItemId) {
+  gridState[cellIndex].itemId = parseInt(newItemId);
+  renderGrid();
+}
+
+function updateSchedule() {
+  currentSchedule = document.getElementById("timeSchedule").value;
+  renderGrid();
+}
+
+// モーダル操作
+function openModal(index) {
+  activeCellIndex = index;
+  const cell = gridState[index];
+  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+  if (cell.itemId === 0) return;
+
+  document.getElementById("modalItemName").innerText = item.name;
+  document.getElementById("modalCurrentStock").innerText = cell.currentStock;
+  document.getElementById("inputModal").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("inputModal").style.display = "none";
+  activeCellIndex = null;
+}
+
+function addCook(qty) {
+  if (activeCellIndex !== null) {
+    gridState[activeCellIndex].currentStock += qty;
+    renderGrid();
+    closeModal();
+  }
+}
+
+function addSell(qty) {
+  if (activeCellIndex !== null) {
+    gridState[activeCellIndex].currentStock = Math.max(0, gridState[activeCellIndex].currentStock - qty);
+    renderGrid();
+    closeModal();
+  }
+}
+
+// 初回起動
+renderGrid();
+</script>
+
+</body>
+</html>
