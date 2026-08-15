@@ -3,31 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF仕込み・陳列リアルタイム管理</title>
+<title>FF什器仕込み・在庫管理コンソール</title>
 <style>
   :root {
-    --bg-main: #0b0f19;
-    --card-bg: #1e293b;
-    --card-border: #334155;
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
+    --bg-main: #0a0f1d;
+    --card-bg: #151e32;
+    --text-main: #f8fafc;
+    --text-sub: #94a3b8;
     
-    /* 上部ボタン（調理・プラス）：立体的ブルー */
-    --btn-cook-bg: linear-gradient(180deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
-    --btn-cook-shadow: 0 4px 0 #172554, 0 5px 8px rgba(0, 0, 0, 0.4);
-    --btn-cook-border: #3b82f6;
-
-    /* 下部ボタン（販売・マイナス）：立体的ダークスレート/レッド */
-    --btn-sell-bg: linear-gradient(180deg, #334155 0%, #1e293b 60%, #0f172a 100%);
-    --btn-sell-shadow: 0 4px 0 #020617, 0 5px 8px rgba(0, 0, 0, 0.4);
-    --btn-sell-border: #475569;
-
-    /* アラート時 */
-    --alert-bg: #450a0a;
-    --alert-border: #ef4444;
-    --alert-glow: rgba(239, 68, 68, 0.5);
-    --badge-cook: #10b981;
-    --badge-sell: #f59e0b;
+    /* ぷっくり立体ボタンカラー（上：調理） */
+    --btn-cook-top: #3b82f6;
+    --btn-cook-bottom: #1d4ed8;
+    --btn-cook-bevel: #60a5fa;
+    --btn-cook-shadow: #172554;
+    
+    /* ぷっくり立体ボタンカラー（下：販売） */
+    --btn-sell-top: #334155;
+    --btn-sell-bottom: #1e293b;
+    --btn-sell-bevel: #475569;
+    --btn-sell-shadow: #020617;
   }
 
   * {
@@ -41,7 +35,7 @@
 
   body {
     background: var(--bg-main);
-    color: var(--text-primary);
+    color: var(--text-main);
     padding: 8px;
     height: 100vh;
     display: flex;
@@ -49,31 +43,55 @@
     overflow: hidden;
   }
 
-  /* ヘッダーエリア */
+  /* ヘッダー */
   header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: var(--card-bg);
-    border: 1px solid var(--card-border);
+    border: 1px solid #334155;
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: 10px;
     margin-bottom: 8px;
-    height: 46px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    height: 48px;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
   .header-title {
     font-size: 15px;
     font-weight: 800;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
-  .header-info {
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    background: #0b1120;
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+  }
+  .nav-tab {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .nav-tab.active {
+    background: #2563eb;
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .header-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
   }
   .time-badge {
     background: #0284c7;
@@ -82,133 +100,158 @@
     border-radius: 6px;
     font-weight: bold;
     font-size: 12px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
   }
   .clock {
-    font-size: 17px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 800;
     font-family: "Courier New", monospace;
-    letter-spacing: 1px;
     color: #38bdf8;
   }
-  .log-btn {
-    background: #475569;
-    color: #fff;
-    border: 1px solid #64748b;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 2px 0 #334155;
+
+  /* ビューコンテナ */
+  .view-container {
+    flex: 1;
+    min-height: 0;
+    display: none;
   }
-  .log-btn:active {
-    transform: translateY(2px);
-    box-shadow: none;
+  .view-container.active {
+    display: flex;
+    flex-direction: column;
   }
 
-  /* 横6 × 縦3 グリッド */
-  .matrix-container {
+  /* ====================================================
+     ホーム画面：横6×縦3 ぷっくりカプセルマトリクス
+  ==================================================== */
+  .matrix-grid {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 8px;
+    gap: 10px;
     flex: 1;
     min-height: 0;
   }
 
-  /* 1マス（セル枠） */
-  .cell {
-    background: #111827;
-    border: 1.5px solid var(--card-border);
-    border-radius: 10px;
+  /* 上下一体のぷっくりカプセルコンテナ */
+  .cell-capsule {
+    background: #0f172a;
+    border-radius: 16px;
+    padding: 5px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 4px;
+    gap: 6px;
+    border: 2px solid #1e293b;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.7), 0 4px 10px rgba(0,0,0,0.4);
     position: relative;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* アラート（最低陳列数割れ） */
-  .cell.alert {
-    background: var(--alert-bg);
-    border-color: var(--alert-border);
-    box-shadow: 0 0 12px var(--alert-glow), inset 0 2px 4px rgba(0,0,0,0.5);
-    animation: alertPulse 1.6s infinite alternate;
+  /* アラート時：カプセル全体がネオンレッドに発光 */
+  .cell-capsule.alert {
+    border-color: #ef4444;
+    box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.5), 0 0 16px rgba(239, 68, 68, 0.6);
+    animation: capsulePulse 1.6s infinite alternate;
   }
-  @keyframes alertPulse {
-    0% { border-color: var(--alert-border); }
-    100% { border-color: #f87171; box-shadow: 0 0 18px rgba(248, 113, 113, 0.8); }
+  @keyframes capsulePulse {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.02); }
   }
 
-  /* === 上部ボタン：調理（＋） === */
-  .btn-panel-top {
-    flex: 1.15;
-    background: var(--btn-cook-bg);
-    border: 1px solid var(--btn-cook-border);
-    border-radius: 7px;
-    box-shadow: var(--btn-cook-shadow);
-    padding: 4px 6px;
+  /* ぷっくりボタン共通スタイル */
+  .capsule-btn {
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    cursor: pointer;
-    position: relative;
-    transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.1s ease;
+    padding: 6px 8px;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.1s ease;
   }
-  .btn-panel-top:hover {
-    filter: brightness(1.08);
-  }
-  /* 押し込み効果 */
-  .btn-panel-top:active {
-    transform: translateY(3px);
-    box-shadow: 0 1px 0 #172554, 0 2px 4px rgba(0, 0, 0, 0.4);
+  .capsule-btn:hover {
+    filter: brightness(1.1);
   }
 
-  .cell-header-row {
+  /* 上ボタン（調理・増）：ぷっくりマリンブルー */
+  .btn-top-cook {
+    flex: 1.15;
+    background: linear-gradient(180deg, var(--btn-cook-top) 0%, var(--btn-cook-bottom) 100%);
+    box-shadow: 
+      inset 0 2px 2px rgba(255, 255, 255, 0.5),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.3),
+      0 5px 0 var(--btn-cook-shadow),
+      0 7px 10px rgba(0, 0, 0, 0.5);
+    border-top: 1px solid var(--btn-cook-bevel);
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+  }
+  .btn-top-cook:active {
+    transform: translateY(4px);
+    box-shadow: 
+      inset 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 1px 0 var(--btn-cook-shadow),
+      0 3px 5px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 下ボタン（販売・減）：ぷっくりダークチャコール */
+  .btn-bottom-sell {
+    flex: 0.85;
+    background: linear-gradient(180deg, var(--btn-sell-top) 0%, var(--btn-sell-bottom) 100%);
+    box-shadow: 
+      inset 0 2px 2px rgba(255, 255, 255, 0.2),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.4),
+      0 5px 0 var(--btn-sell-shadow),
+      0 7px 10px rgba(0, 0, 0, 0.5);
+    border-top: 1px solid var(--btn-sell-bevel);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+  }
+  .btn-bottom-sell:active {
+    transform: translateY(4px);
+    background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%);
+    box-shadow: 
+      inset 0 1px 2px rgba(0, 0, 0, 0.5),
+      0 1px 0 #450a0a,
+      0 3px 5px rgba(0, 0, 0, 0.4);
+  }
+
+  /* マス内部のパーツ */
+  .cell-header-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .item-select {
-    background: rgba(15, 23, 42, 0.85);
-    color: #ffffff;
-    border: 1px solid #60a5fa;
-    border-radius: 4px;
-    font-size: 11px;
+  .item-title {
+    font-size: 13px;
     font-weight: 800;
-    max-width: 76%;
-    padding: 2px;
-    cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 75%;
   }
-  .action-tag-up {
-    font-size: 10px;
+  .action-pill-up {
+    font-size: 9px;
     font-weight: 800;
-    background: #1e40af;
-    color: #93c5fd;
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
     padding: 1px 5px;
-    border-radius: 4px;
-    border: 1px solid #3b82f6;
+    border-radius: 10px;
+    backdrop-filter: blur(2px);
   }
 
-  .stock-center {
+  .stock-box {
     display: flex;
     justify-content: center;
     align-items: baseline;
-    gap: 4px;
-    margin: 1px 0;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    gap: 3px;
+    margin: 2px 0;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
   }
-  .stock-num {
-    font-size: 26px;
+  .stock-val {
+    font-size: 28px;
     font-weight: 900;
     line-height: 1;
-    color: #ffffff;
-  }
-  .cell.alert .stock-num {
-    color: #fecaca;
+    color: #fff;
   }
   .stock-unit {
     font-size: 11px;
@@ -216,432 +259,411 @@
     color: #bfdbfe;
   }
 
-  /* === 下部ボタン：販売（−）＆ 目標表示 === */
-  .btn-panel-bottom {
-    flex: 0.85;
-    background: var(--btn-sell-bg);
-    border: 1px solid var(--btn-sell-border);
-    border-radius: 7px;
-    box-shadow: var(--btn-sell-shadow);
-    padding: 4px 6px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    cursor: pointer;
-    position: relative;
-    transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.1s ease;
-  }
-  .btn-panel-bottom:hover {
-    filter: brightness(1.12);
-  }
-  /* 押し込み効果 */
-  .btn-panel-bottom:active {
-    transform: translateY(3px);
-    box-shadow: 0 1px 0 #020617, 0 2px 4px rgba(0, 0, 0, 0.4);
-    background: linear-gradient(180deg, #450a0a 0%, #7f1d1d 100%);
-    border-color: #ef4444;
-  }
-
-  .target-info {
+  .target-line {
     display: flex;
     justify-content: space-between;
     font-size: 10px;
     color: #94a3b8;
   }
-  .target-info span {
+  .target-line span {
     font-weight: 800;
-    color: #f1f5f9;
+    color: #e2e8f0;
   }
 
-  .bottom-action-row {
+  .sell-action-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: rgba(0, 0, 0, 0.35);
-    padding: 2px 5px;
-    border-radius: 4px;
-    margin-top: 1px;
+    padding: 2px 6px;
+    border-radius: 6px;
   }
-  .recommend-label {
-    font-size: 10px;
-    color: #94a3b8;
-  }
-  .recommend-value {
-    font-size: 12px;
-    font-weight: 900;
-    color: #f87171;
-  }
-  .action-tag-down {
+  .rec-label { font-size: 10px; color: #94a3b8; }
+  .rec-val { font-size: 13px; font-weight: 900; color: #f87171; }
+  .action-pill-down {
     font-size: 9px;
     font-weight: 800;
     background: #475569;
     color: #cbd5e1;
     padding: 1px 4px;
-    border-radius: 3px;
+    border-radius: 4px;
   }
 
-  /* タイマーバッジ */
-  .buffer-badge {
+  /* 確定バッジ */
+  .badge-toast {
     position: absolute;
-    right: 4px;
-    top: 22px;
-    padding: 2px 6px;
-    border-radius: 10px;
+    right: 6px;
+    top: 24px;
+    padding: 2px 8px;
+    border-radius: 12px;
     font-size: 10px;
     font-weight: 900;
     color: #fff;
     display: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    z-index: 5;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+    z-index: 10;
   }
-  .buffer-cook { background: var(--badge-cook); border: 1px solid #34d399; }
-  .buffer-sell { background: var(--badge-sell); top: auto; bottom: 20px; border: 1px solid #fbbf24; }
+  .toast-cook { background: #10b981; border: 1px solid #34d399; }
+  .toast-sell { background: #f59e0b; top: auto; bottom: 22px; border: 1px solid #fbbf24; }
 
-  /* モーダル */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0,0,0,0.75);
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-  }
-  .modal-content {
-    background: #1e293b;
-    border: 1px solid #475569;
+  /* ====================================================
+     マスタ管理画面
+  ==================================================== */
+  .master-wrapper {
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid #334155;
     border-radius: 10px;
-    width: 90%;
-    max-width: 500px;
-    max-height: 80vh;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    padding: 16px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    overflow-y: auto;
   }
-  .modal-header {
+  .master-section-title {
+    font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 16px;
-    font-weight: bold;
-    margin-bottom: 10px;
+    color: #38bdf8;
   }
-  .log-list {
+  .master-table-container {
     flex: 1;
-    overflow-y: auto;
+    overflow: auto;
+    border: 1px solid #334155;
+    border-radius: 8px;
+  }
+  .master-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 12px;
-    list-style: none;
+    text-align: left;
   }
-  .log-item {
-    padding: 8px 4px;
+  .master-table th {
+    background: #0f172a;
+    padding: 8px;
     border-bottom: 1px solid #334155;
-    display: flex;
-    justify-content: space-between;
+    color: #94a3b8;
+    position: sticky;
+    top: 0;
   }
-  .log-cook { color: #4ade80; font-weight: bold; }
-  .log-sell { color: #fbbf24; font-weight: bold; }
+  .master-table td {
+    padding: 8px;
+    border-bottom: 1px solid #1e293b;
+  }
+  .master-table tr:hover { background: #1e293b; }
+  .input-control {
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    color: #fff;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+  }
+  .btn-save-master {
+    background: #22c55e;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #15803d;
+  }
+  .btn-save-master:active {
+    transform: translateY(2px);
+    box-shadow: none;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="header-title">
-    <span>🏪 FF什器仕込みコンソール</span>
+  <div class="header-left">
+    <div class="header-title">🏪 FF管理</div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchView('home')">仕込みコンソール</button>
+      <button class="nav-tab" onclick="switchView('master')">⚙ マスタ設定</button>
+    </div>
   </div>
-  <div class="header-info">
+  <div class="header-right">
     <div id="scheduleBadge" class="time-badge">昼 (11:00〜)</div>
     <div id="clockDisplay" class="clock">--:--:--</div>
-    <button class="log-btn" onclick="openLogModal()">確定履歴</button>
   </div>
 </header>
 
-<div class="matrix-container" id="matrixGrid"></div>
+<!-- ホーム画面（コンソール） -->
+<div id="homeView" class="view-container active">
+  <div class="matrix-grid" id="matrixGrid"></div>
+</div>
 
-<!-- 確定ログ確認モーダル -->
-<div class="modal-overlay" id="logModal" onclick="closeLogModal(event)">
-  <div class="modal-content" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <span>1分タイマー確定 履歴一覧</span>
-      <button class="log-btn" onclick="closeLogModal()">✕</button>
+<!-- マスタ管理画面 -->
+<div id="masterView" class="view-container">
+  <div class="master-wrapper">
+    <div class="master-section-title">
+      <span>📋 商品＆スケジュール目標数マスタ設定</span>
+      <button class="btn-save-master" onclick="saveMasterData()">💾 設定を保存して反映</button>
     </div>
-    <ul class="log-list" id="logList">
-      <li class="log-item" style="color:#64748b;">確定された記録はここに表示されます</li>
-    </ul>
+    <div class="master-table-container">
+      <table class="master-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">ID</th>
+            <th style="width: 140px;">商品名</th>
+            <th style="width: 110px;">カテゴリ</th>
+            <th style="width: 80px;">朝 目標</th>
+            <th style="width: 80px;">昼 目標</th>
+            <th style="width: 80px;">夕 目標</th>
+            <th style="width: 90px;">最低比率</th>
+          </tr>
+        </thead>
+        <tbody id="masterTableBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 <script>
-const ITEMS = [
-  { id: 0, name: "（空き）", morningMax: 0, lunchMax: 0, eveningMax: 0, minRatio: 0 },
-  { id: 1, name: "ファミチキ", morningMax: 8, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
-  { id: 2, name: "ファミチキレッド", morningMax: 6, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
-  { id: 3, name: "クリスピー", morningMax: 3, lunchMax: 4, eveningMax: 3, minRatio: 0.5 },
-  { id: 4, name: "スパイシー", morningMax: 2, lunchMax: 4, eveningMax: 2, minRatio: 0.5 },
-  { id: 5, name: "山賊焼", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
-  { id: 6, name: "ころじゃが", morningMax: 4, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
-  { id: 7, name: "ハッシュドポテト", morningMax: 2, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
-  { id: 8, name: "ファミコロ", morningMax: 1, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
-  { id: 9, name: "黒豚まん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
-  { id: 10, name: "肉まん", morningMax: 5, lunchMax: 5, eveningMax: 16, minRatio: 0.3 },
-  { id: 11, name: "ピザまん", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.3 },
-  { id: 12, name: "あんまん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
-  { id: 13, name: "ももタレ", morningMax: 3, lunchMax: 4, eveningMax: 5, minRatio: 0.5 },
-  { id: 14, name: "かわタレ", morningMax: 4, lunchMax: 4, eveningMax: 6, minRatio: 0.5 },
-  { id: 15, name: "もも塩", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
-  { id: 16, name: "かわ塩", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
-  { id: 17, name: "ジャンボフランク", morningMax: 2, lunchMax: 2, eveningMax: 3, minRatio: 0.5 }
+// マスタデータ初期値
+let MASTER_ITEMS = [
+  { id: 0, name: "（空き）", category: "-", morningMax: 0, lunchMax: 0, eveningMax: 0, minRatio: 0 },
+  { id: 1, name: "ファミチキ", category: "ホッターズ", morningMax: 8, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
+  { id: 2, name: "ファミチキレッド", category: "ホッターズ", morningMax: 6, lunchMax: 12, eveningMax: 12, minRatio: 0.4 },
+  { id: 3, name: "クリスピー", category: "ホッターズ", morningMax: 3, lunchMax: 4, eveningMax: 3, minRatio: 0.5 },
+  { id: 4, name: "スパイシー", category: "ホッターズ", morningMax: 2, lunchMax: 4, eveningMax: 2, minRatio: 0.5 },
+  { id: 5, name: "山賊焼", category: "ホッターズ", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
+  { id: 6, name: "ころじゃが", category: "ホッターズ", morningMax: 4, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
+  { id: 7, name: "ハッシュドポテト", category: "ホッターズ", morningMax: 2, lunchMax: 4, eveningMax: 4, minRatio: 0.5 },
+  { id: 8, name: "ファミコロ", category: "ホッターズ", morningMax: 1, lunchMax: 2, eveningMax: 2, minRatio: 0.5 },
+  { id: 9, name: "黒豚まん", category: "中華まん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
+  { id: 10, name: "肉まん", category: "中華まん", morningMax: 5, lunchMax: 5, eveningMax: 16, minRatio: 0.3 },
+  { id: 11, name: "ピザまん", category: "中華まん", morningMax: 2, lunchMax: 2, eveningMax: 2, minRatio: 0.3 },
+  { id: 12, name: "あんまん", category: "中華まん", morningMax: 1, lunchMax: 1, eveningMax: 1, minRatio: 0.3 },
+  { id: 13, name: "ももタレ", category: "常温総菜", morningMax: 3, lunchMax: 4, eveningMax: 5, minRatio: 0.5 },
+  { id: 14, name: "かわタレ", category: "常温総菜", morningMax: 4, lunchMax: 4, eveningMax: 6, minRatio: 0.5 },
+  { id: 15, name: "もも塩", category: "常温総菜", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
+  { id: 16, name: "かわ塩", category: "常温総菜", morningMax: 3, lunchMax: 3, eveningMax: 4, minRatio: 0.5 },
+  { id: 17, name: "ジャンボフランク", category: "ホッターズ", morningMax: 2, lunchMax: 2, eveningMax: 3, minRatio: 0.5 }
 ];
 
-let gridState = Array(18).fill(null).map((_, index) => {
-  return {
-    cellId: index,
-    itemId: index < 17 ? index + 1 : 0,
-    currentStock: 4,
-    cookBuffer: 0,
-    cookTimer: null,
-    cookRemainingSec: 0,
-    sellBuffer: 0,
-    sellTimer: null,
-    sellRemainingSec: 0
-  };
-});
+// グリッド状態（18マス）
+let gridState = Array(18).fill(null).map((_, index) => ({
+  cellId: index,
+  itemId: index < 17 ? index + 1 : 0,
+  currentStock: 4,
+  cookBuffer: 0,
+  cookTimer: null,
+  cookRemainingSec: 0,
+  sellBuffer: 0,
+  sellTimer: null,
+  sellRemainingSec: 0
+}));
 
 let currentScheduleKey = "lunch";
-let commitLogs = [];
 
+// 時計＆スケジュール自動判定
 function updateClock() {
   const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-
+  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
   document.getElementById("clockDisplay").innerText = 
-    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-  let newScheduleKey = "evening";
+  let newKey = "evening";
   let label = "夕方・夜 (16:00〜)";
-
-  if (hours >= 6 && hours < 11) {
-    newScheduleKey = "morning";
-    label = "朝 (6:00〜)";
-  } else if (hours >= 11 && hours < 16) {
-    newScheduleKey = "lunch";
-    label = "昼 (11:00〜)";
-  }
+  if (h >= 6 && h < 11) { newKey = "morning"; label = "朝 (6:00〜)"; }
+  else if (h >= 11 && h < 16) { newKey = "lunch"; label = "昼 (11:00〜)"; }
 
   const badge = document.getElementById("scheduleBadge");
-  if (badge.innerText !== label) {
-    badge.innerText = label;
-  }
+  if (badge.innerText !== label) badge.innerText = label;
 
-  if (currentScheduleKey !== newScheduleKey) {
-    currentScheduleKey = newScheduleKey;
+  if (currentScheduleKey !== newKey) {
+    currentScheduleKey = newKey;
     renderGrid();
   }
 }
 
+// 画面切り替え
+function switchView(viewName) {
+  document.querySelectorAll(".nav-tab").forEach(tab => tab.classList.remove("active"));
+  document.querySelectorAll(".view-container").forEach(v => v.classList.remove("active"));
+
+  if (viewName === 'home') {
+    document.querySelectorAll(".nav-tab")[0].classList.add("active");
+    document.getElementById("homeView").classList.add("active");
+    renderGrid();
+  } else {
+    document.querySelectorAll(".nav-tab")[1].classList.add("active");
+    document.getElementById("masterView").classList.add("active");
+    renderMasterTable();
+  }
+}
+
+// ホームグリッド描画
 function renderGrid() {
   const container = document.getElementById("matrixGrid");
   container.innerHTML = "";
 
   gridState.forEach((cell, idx) => {
-    const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+    const item = MASTER_ITEMS.find(i => i.id === cell.itemId) || MASTER_ITEMS[0];
     const maxQty = item[`${currentScheduleKey}Max`] || 0;
     const minQty = Math.ceil(maxQty * (item.minRatio || 0));
     const recommendQty = Math.max(0, maxQty - cell.currentStock);
     const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
 
-    const cellDiv = document.createElement("div");
-    cellDiv.className = `cell ${isAlert ? 'alert' : ''}`;
-    cellDiv.id = `cell-${idx}`;
+    const capsule = document.createElement("div");
+    capsule.className = `cell-capsule ${isAlert ? 'alert' : ''}`;
+    capsule.id = `capsule-${idx}`;
 
-    let optionsHtml = ITEMS.map(i => 
-      `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`
-    ).join("");
-
-    cellDiv.innerHTML = `
-      <!-- 上ボタン：調理（＋） -->
-      <div class="btn-panel-top" onclick="handleCellTouch(${idx}, 'cook')">
-        <div class="cell-header-row">
-          <select class="item-select" onchange="changeItem(${idx}, this.value)" onclick="event.stopPropagation()">
-            ${optionsHtml}
-          </select>
-          <span class="action-tag-up">＋調理</span>
+    capsule.innerHTML = `
+      <!-- 上ボタン：ぷっくり調理（＋） -->
+      <div class="capsule-btn btn-top-cook" onclick="handleTouch(${idx}, 'cook')">
+        <div class="cell-header-line">
+          <span class="item-title">${item.name}</span>
+          <span class="action-pill-up">＋調理</span>
         </div>
-        <div class="stock-center">
-          <div class="stock-num">${cell.itemId === 0 ? '-' : cell.currentStock}</div>
-          <div class="stock-unit">${cell.itemId === 0 ? '' : '個'}</div>
+        <div class="stock-box">
+          <span class="stock-val">${cell.itemId === 0 ? '-' : cell.currentStock}</span>
+          <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
         </div>
-        <div class="buffer-badge buffer-cook" id="cook-badge-${idx}"></div>
+        <div class="badge-toast toast-cook" id="cook-badge-${idx}"></div>
       </div>
 
-      <!-- 下ボタン：販売（−）＆ 目標数 -->
-      <div class="btn-panel-bottom" onclick="handleCellTouch(${idx}, 'sell')">
-        <div class="target-info">
+      <!-- 下ボタン：ぷっくり販売（−） -->
+      <div class="capsule-btn btn-bottom-sell" onclick="handleTouch(${idx}, 'sell')">
+        <div class="target-line">
           <div>最高: <span>${maxQty}</span></div>
           <div>最低: <span>${minQty}</span></div>
         </div>
-        <div class="bottom-action-row">
+        <div class="sell-action-line">
           <div>
-            <span class="recommend-label">推奨: </span>
-            <span class="recommend-value">${cell.itemId === 0 ? '-' : recommendQty + '個'}</span>
+            <span class="rec-label">推奨: </span>
+            <span class="rec-val">${cell.itemId === 0 ? '-' : recommendQty + '個'}</span>
           </div>
-          <span class="action-tag-down">−販売</span>
+          <span class="action-pill-down">−販売</span>
         </div>
-        <div class="buffer-badge buffer-sell" id="sell-badge-${idx}"></div>
+        <div class="badge-toast toast-sell" id="sell-badge-${idx}"></div>
       </div>
     `;
 
-    container.appendChild(cellDiv);
+    container.appendChild(capsule);
     updateBadges(idx);
   });
 }
 
-function handleCellTouch(index, type) {
+// タッチ＆1分バッファ処理
+function handleTouch(index, type) {
   const cell = gridState[index];
   if (cell.itemId === 0) return;
 
   if (type === 'cook') {
     cell.currentStock++;
     cell.cookBuffer++;
-    startCommitTimer(index, 'cook');
-  } else if (type === 'sell') {
+    startTimer(index, 'cook');
+  } else {
     if (cell.currentStock > 0) {
       cell.currentStock--;
       cell.sellBuffer++;
-      startCommitTimer(index, 'sell');
+      startTimer(index, 'sell');
     }
   }
-
-  refreshCellView(index);
+  refreshCell(index);
 }
 
-function startCommitTimer(index, type) {
+function startTimer(index, type) {
   const cell = gridState[index];
-
   if (type === 'cook') {
     if (cell.cookTimer) clearInterval(cell.cookTimer);
     cell.cookRemainingSec = 60;
-
     cell.cookTimer = setInterval(() => {
       cell.cookRemainingSec--;
       if (cell.cookRemainingSec <= 0) {
         clearInterval(cell.cookTimer);
         cell.cookTimer = null;
-        commitTransaction(index, '調理', cell.cookBuffer);
         cell.cookBuffer = 0;
       }
       updateBadges(index);
     }, 1000);
-  } else if (type === 'sell') {
+  } else {
     if (cell.sellTimer) clearInterval(cell.sellTimer);
     cell.sellRemainingSec = 60;
-
     cell.sellTimer = setInterval(() => {
       cell.sellRemainingSec--;
       if (cell.sellRemainingSec <= 0) {
         clearInterval(cell.sellTimer);
         cell.sellTimer = null;
-        commitTransaction(index, '販売', cell.sellBuffer);
         cell.sellBuffer = 0;
       }
       updateBadges(index);
     }, 1000);
   }
-
   updateBadges(index);
 }
 
 function updateBadges(index) {
   const cell = gridState[index];
-  const cookBadge = document.getElementById(`cook-badge-${index}`);
-  const sellBadge = document.getElementById(`sell-badge-${index}`);
-
-  if (cookBadge) {
-    if (cell.cookBuffer > 0) {
-      cookBadge.style.display = 'block';
-      cookBadge.innerText = `+${cell.cookBuffer} 調理 (${cell.cookRemainingSec}s)`;
-    } else {
-      cookBadge.style.display = 'none';
-    }
+  const cb = document.getElementById(`cook-badge-${index}`);
+  const sb = document.getElementById(`sell-badge-${index}`);
+  if (cb) {
+    cb.style.display = cell.cookBuffer > 0 ? 'block' : 'none';
+    cb.innerText = `+${cell.cookBuffer} 調理 (${cell.cookRemainingSec}s)`;
   }
-
-  if (sellBadge) {
-    if (cell.sellBuffer > 0) {
-      sellBadge.style.display = 'block';
-      sellBadge.innerText = `-${cell.sellBuffer} 販売 (${cell.sellRemainingSec}s)`;
-    } else {
-      sellBadge.style.display = 'none';
-    }
+  if (sb) {
+    sb.style.display = cell.sellBuffer > 0 ? 'block' : 'none';
+    sb.innerText = `-${cell.sellBuffer} 販売 (${cell.sellRemainingSec}s)`;
   }
 }
 
-function commitTransaction(index, actionName, qty) {
-  if (qty <= 0) return;
+function refreshCell(index) {
   const cell = gridState[index];
-  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-  const logEntry = {
-    time: timeStr,
-    itemName: item.name,
-    action: actionName,
-    qty: qty
-  };
-  commitLogs.unshift(logEntry);
-  updateLogListUI();
-}
-
-function refreshCellView(index) {
-  const cell = gridState[index];
-  const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+  const item = MASTER_ITEMS.find(i => i.id === cell.itemId) || MASTER_ITEMS[0];
   const maxQty = item[`${currentScheduleKey}Max`] || 0;
   const minQty = Math.ceil(maxQty * (item.minRatio || 0));
   const recommendQty = Math.max(0, maxQty - cell.currentStock);
   const isAlert = cell.itemId !== 0 && cell.currentStock <= minQty;
 
-  const cellDiv = document.getElementById(`cell-${index}`);
-  if (!cellDiv) return;
+  const cap = document.getElementById(`capsule-${index}`);
+  if (!cap) return;
 
-  if (isAlert) {
-    cellDiv.classList.add('alert');
-  } else {
-    cellDiv.classList.remove('alert');
-  }
+  if (isAlert) cap.classList.add('alert');
+  else cap.classList.remove('alert');
 
-  const stockNum = cellDiv.querySelector('.stock-num');
-  if (stockNum) stockNum.innerText = cell.itemId === 0 ? '-' : cell.currentStock;
-
-  const recValue = cellDiv.querySelector('.recommend-value');
-  if (recValue) recValue.innerText = cell.itemId === 0 ? '-' : recommendQty + '個';
-
+  cap.querySelector('.stock-val').innerText = cell.itemId === 0 ? '-' : cell.currentStock;
+  cap.querySelector('.rec-val').innerText = cell.itemId === 0 ? '-' : recommendQty + '個';
   updateBadges(index);
 }
 
-function changeItem(index, newItemId) {
-  gridState[index].itemId = parseInt(newItemId);
-  renderGrid();
+// マスタテーブル描画
+function renderMasterTable() {
+  const tbody = document.getElementById("masterTableBody");
+  tbody.innerHTML = MASTER_ITEMS.filter(i => i.id !== 0).map(item => `
+    <tr>
+      <td>${item.id}</td>
+      <td><input class="input-control" type="text" id="m-name-${item.id}" value="${item.name}"></td>
+      <td><input class="input-control" type="text" id="m-cat-${item.id}" value="${item.category}"></td>
+      <td><input class="input-control" type="number" id="m-mMax-${item.id}" value="${item.morningMax}"></td>
+      <td><input class="input-control" type="number" id="m-lMax-${item.id}" value="${item.lunchMax}"></td>
+      <td><input class="input-control" type="number" id="m-eMax-${item.id}" value="${item.eveningMax}"></td>
+      <td><input class="input-control" type="number" step="0.1" id="m-ratio-${item.id}" value="${item.minRatio}"></td>
+    </tr>
+  `).join("");
 }
 
-function openLogModal() {
-  document.getElementById("logModal").style.display = "flex";
-}
-function closeLogModal() {
-  document.getElementById("logModal").style.display = "none";
-}
-function updateLogListUI() {
-  const logList = document.getElementById("logList");
-  if (commitLogs.length === 0) return;
-  logList.innerHTML = commitLogs.slice(0, 30).map(log => `
-    <li class="log-item">
-      <span>[${log.time}] <b>${log.itemName}</b></span>
-      <span class="${log.action === '調理' ? 'log-cook' : 'log-sell'}">
-        ${log.action} +${log.qty}個 確定
-      </span>
-    </li>
-  `).join("");
+// マスタ保存
+function saveMasterData() {
+  MASTER_ITEMS.forEach(item => {
+    if (item.id === 0) return;
+    item.name = document.getElementById(`m-name-${item.id}`).value;
+    item.category = document.getElementById(`m-cat-${item.id}`).value;
+    item.morningMax = parseInt(document.getElementById(`m-mMax-${item.id}`).value) || 0;
+    item.lunchMax = parseInt(document.getElementById(`m-lMax-${item.id}`).value) || 0;
+    item.eveningMax = parseInt(document.getElementById(`m-eMax-${item.id}`).value) || 0;
+    item.minRatio = parseFloat(document.getElementById(`m-ratio-${item.id}`).value) || 0;
+  });
+  alert("マスタ設定を保存しました！ホーム画面に反映されます。");
+  switchView('home');
 }
 
 setInterval(updateClock, 1000);
