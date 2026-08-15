@@ -681,7 +681,7 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 実績ログのローカル保持＆GASへの非同期自動送信
+// 実績ログのローカル保持＆GASへの非同期自動送信（安定版）
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -691,6 +691,50 @@ function recordArchiveAndSync(itemId, type, qty) {
   if (type === 'cook') DAILY_ARCHIVES[dateKey][itemId].cook += qty;
   else if (type === 'sell') DAILY_ARCHIVES[dateKey][itemId].sell += qty;
   else if (type === 'waste') DAILY_ARCHIVES[dateKey][itemId].waste += qty;
+
+  const item = ITEMS.find(i => i.id === itemId);
+  const curStore = getCurrentStore();
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  
+  const payloadData = {
+    timestamp: now.toISOString(),
+    date: dateKey,
+    time: timeStr,
+    storeId: curStore.id,
+    storeName: curStore.name,
+    timeSlot: currentScheduleKey,
+    itemId: itemId,
+    itemName: item.name,
+    category: item.category,
+    price: item.price,
+    action: type === 'cook' ? '調理' : (type === 'sell' ? '販売' : '廃棄'),
+    qty: qty,
+    salesAmount: type === 'sell' ? item.price * qty : 0,
+    wasteAmount: type === 'waste' ? item.price * qty : 0
+  };
+
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
+    console.warn("GAS_ENDPOINT_URL が設定されていません。");
+    return;
+  }
+
+  // GAS向けに最適化したPOST通信（text/plainで送信）
+  fetch(GAS_ENDPOINT_URL, {
+    method: "POST",
+    mode: "no-cors", // CORSエラーを回避
+    headers: {
+      "Content-Type": "text/plain" // GASではtext/plainが最も確実
+    },
+    body: JSON.stringify({ type: "record_log", payload: payloadData })
+  })
+  .then(() => {
+    console.log("GAS送信完了:", payloadData.itemName, payloadData.action);
+  })
+  .catch(err => {
+    console.error("GAS送信エラー:", err);
+  });
+}
 
   // 重回帰分析用データレコードの構築
   const item = ITEMS.find(i => i.id === itemId);
