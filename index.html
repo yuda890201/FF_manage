@@ -15,7 +15,6 @@
     --text-main: #f8fafc;
     --text-sub: #94a3b8;
     
-    /* ぷっくり立体ボタンカラー */
     --btn-cook-top: #2563eb;
     --btn-cook-bottom: #1d4ed8;
     --btn-cook-bevel: #60a5fa;
@@ -50,7 +49,6 @@
     overflow: hidden;
   }
 
-  /* ヘッダー */
   header {
     display: flex;
     justify-content: space-between;
@@ -79,6 +77,15 @@
     align-items: center;
     gap: 4px;
   }
+  .sync-indicator {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: #334155;
+    color: #94a3b8;
+  }
+  .sync-indicator.online { background: #166534; color: #4ade80; }
+
   .nav-tabs {
     display: flex;
     gap: 3px;
@@ -131,7 +138,6 @@
     color: #38bdf8;
   }
 
-  /* 廃棄アラートバー */
   .waste-alert-bar {
     display: flex;
     align-items: center;
@@ -187,7 +193,6 @@
     font-size: 10px;
   }
 
-  /* ビューコンテナ */
   .view-container {
     flex: 1;
     min-height: 0;
@@ -198,7 +203,6 @@
     flex-direction: column;
   }
 
-  /* ホーム画面 */
   .home-fixtures-wrapper {
     display: flex;
     gap: 8px;
@@ -286,7 +290,6 @@
   .toast-cook { background: #10b981; }
   .toast-sell { background: #f59e0b; top: auto; bottom: 12px; }
 
-  /* 実績・マスタ共通 */
   .master-wrapper {
     flex: 1;
     background: var(--card-bg);
@@ -329,14 +332,12 @@
   .summary-label { font-size: 10px; color: #94a3b8; font-weight: bold; }
   .summary-value { font-size: 16px; font-weight: 900; color: #fff; }
 
-  /* 什器配置 */
   .fixture-layout-editor { display: flex; gap: 8px; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
   .fixture-section-edit-card { background: #0f172a; border-radius: 8px; border: 2px solid #334155; padding: 6px; display: flex; flex-direction: column; min-width: 0; height: 100%; }
   .fixture-edit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
   .fixture-matrix-edit { display: grid; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; padding: 3px; background: #070c18; border-radius: 6px; }
   .edit-cell-box { background: #1e293b; border: 1px dashed #475569; border-radius: 4px; padding: 2px; }
 
-  /* モーダル */
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 </style>
@@ -346,6 +347,7 @@
 <header>
   <div class="header-left">
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
+    <div class="sync-indicator" id="syncStatus">🔄 同期中...</div>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchView('home')">ホーム</button>
       <button class="nav-tab" onclick="switchView('record')">📊 実績</button>
@@ -362,18 +364,15 @@
   </div>
 </header>
 
-<!-- 廃棄アラートバー -->
 <div class="waste-alert-bar" id="wasteAlertBar">
   <div class="waste-bar-label"><span>⚠️ 期限間近</span></div>
   <div class="waste-items-scroll" id="wasteItemsContainer"></div>
 </div>
 
-<!-- ホーム画面 -->
 <div id="homeView" class="view-container active">
   <div class="home-fixtures-wrapper" id="homeFixturesWrapper"></div>
 </div>
 
-<!-- 実績画面 -->
 <div id="recordView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -404,14 +403,13 @@
   </div>
 </div>
 
-<!-- 店舗マスタ画面 -->
 <div id="storeMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">🏪 店舗マスタ（端末ごとの運用店舗選択・追加編集）</div>
       <div style="display:flex; gap:6px;">
         <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewStoreRow()">＋ 店舗追加</button>
-        <button class="btn-save-action" onclick="saveStoreMaster()">💾 保存して店舗適用</button>
+        <button class="btn-save-action" onclick="saveStoreMaster()">💾 保存して全店同期</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -431,12 +429,11 @@
   </div>
 </div>
 
-<!-- 商品マスタ画面 -->
 <div id="itemMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">📦 商品マスタ（全店共通）</div>
-      <button class="btn-save-action" onclick="saveItemMaster()">💾 商品設定を保存</button>
+      <button class="btn-save-action" onclick="saveItemMaster()">💾 保存して全店同期</button>
     </div>
     <div class="table-scroll">
       <table class="master-table">
@@ -452,7 +449,6 @@
   </div>
 </div>
 
-<!-- スケジュール＆時間帯マスタ画面 -->
 <div id="scheduleMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -461,11 +457,9 @@
         <select id="scheduleDaySelect" class="ctrl-select" style="width:90px;" onchange="renderScheduleMasterTable()">
           <option value="weekday">平日</option><option value="weekend">土日祝</option>
         </select>
-        <button class="btn-save-action" onclick="saveScheduleMaster()">💾 スケジュール保存</button>
+        <button class="btn-save-action" onclick="saveScheduleMaster()">💾 保存して全店同期</button>
       </div>
     </div>
-
-    <!-- 時間帯（スロット）編集エリア -->
     <div style="display:flex; gap:8px; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
         <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00">〜
@@ -477,7 +471,6 @@
         <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00">〜
       </div>
     </div>
-
     <div class="table-scroll">
       <table class="master-table">
         <thead>
@@ -493,18 +486,16 @@
   </div>
 </div>
 
-<!-- 什器配置マスタ画面 -->
 <div id="layoutMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">📐 店舗別 什器配置マスタ</div>
-      <button class="btn-save-action" onclick="saveLayoutMaster()">💾 什器設定を保存</button>
+      <button class="btn-save-action" onclick="saveLayoutMaster()">💾 保存して全店同期</button>
     </div>
     <div class="fixture-layout-editor" id="fixtureLayoutEditor"></div>
   </div>
 </div>
 
-<!-- 廃棄モーダル -->
 <div class="modal-overlay" id="wasteModal">
   <div class="modal-content">
     <div style="font-size:13px; font-weight:900; color:#f87171;" id="wasteModalTitle">廃棄登録</div>
@@ -523,20 +514,19 @@
 // GASのウェブアプリURL
 const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
 
-// ① 店舗マスタ
+// ① 店舗マスタ初期値
 let STORE_MASTER = [
   { id: "S001", name: "清川二丁目店", area: "福岡中央", memo: "デフォルト店舗", isCurrent: true },
   { id: "S002", name: "博多住吉通り店", area: "博多", memo: "デフォルト店舗", isCurrent: false }
 ];
 
-// 時間帯スケジュールスロット定義
 let TIME_SLOTS = {
   morning: { label: "朝", startHour: 6 },
   lunch: { label: "昼", startHour: 11 },
   evening: { label: "夕・夜", startHour: 16 }
 };
 
-// ② 商品マスタ
+// ② 商品マスタ初期値
 let ITEMS = [
   { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
   { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
@@ -558,7 +548,7 @@ let ITEMS = [
   { id: 17, name: "ジャンボフランク", category: "ホッターズ", price: 190, limitHour: 6 }
 ];
 
-// ③ スケジュール最高在庫数＆最低比率
+// ③ スケジュール初期値
 let SCHEDULE_CONFIG = {
   weekday: {
     1: { morning: 8, lunch: 12, evening: 12, minRatio: 0.4 },
@@ -600,7 +590,7 @@ let SCHEDULE_CONFIG = {
   }
 };
 
-// ④ 什器セクション別定義
+// ④ 什器セクション初期値
 let FIXTURE_SECTIONS = [
   {
     id: "sec_steam",
@@ -681,7 +671,70 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 実績ログのローカル保持＆GASへの非同期自動送信
+// === 初期自動ロード（スプレッドシートから全設定と今日の実績を復元） ===
+function loadDataFromSpreadsheet() {
+  const indicator = document.getElementById("syncStatus");
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
+    if (indicator) indicator.innerText = "⚠️ URL未設定";
+    return;
+  }
+
+  indicator.innerText = "🔄 同期中...";
+  fetch(GAS_ENDPOINT_URL)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === "success") {
+        if (data.items && data.items.length > 0) {
+          ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(data.items);
+        }
+        if (data.stores && data.stores.length > 0) {
+          STORE_MASTER = data.stores;
+        }
+        if (data.config) {
+          if (data.config.fixtures) FIXTURE_SECTIONS = data.config.fixtures;
+          if (data.config.schedule) SCHEDULE_CONFIG = data.config.schedule;
+          if (data.config.timeSlots) TIME_SLOTS = data.config.timeSlots;
+        }
+        if (data.todayRecords) {
+          DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
+        }
+
+        indicator.innerText = "🟢 同期完了";
+        indicator.classList.add("online");
+        renderHomeFixtures();
+        renderRecordTable();
+        document.getElementById("currentStoreBadge").innerText = `🏪 ${getCurrentStore().name}`;
+      }
+    })
+    .catch(err => {
+      console.warn("Spreadsheet Load Error:", err);
+      if (indicator) indicator.innerText = "📴 オフライン";
+    });
+}
+
+// === 全マスタの一括保存＆スプレッドシート同期 ===
+function syncAllMasterToSpreadsheet() {
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+
+  const fullPayload = {
+    items: ITEMS,
+    stores: STORE_MASTER,
+    fixtures: FIXTURE_SECTIONS,
+    schedule: SCHEDULE_CONFIG,
+    timeSlots: TIME_SLOTS
+  };
+
+  fetch(GAS_ENDPOINT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ type: "sync_all_master", payload: fullPayload })
+  }).then(() => {
+    console.log("全マスタ・設定をスプレッドシートへ同期保存しました。");
+  }).catch(err => console.error("Sync Error:", err));
+}
+
+// 実績ログの送信
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -714,26 +767,16 @@ function recordArchiveAndSync(itemId, type, qty) {
     wasteAmount: type === 'waste' ? item.price * qty : 0
   };
 
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
-    console.warn("GAS_ENDPOINT_URL が未設定です");
-    return;
-  }
+  if (!GAS_ENDPOINT_URL) return;
 
   fetch(GAS_ENDPOINT_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ type: "record_log", payload: payloadData })
-  })
-  .then(() => {
-    console.log("GAS送信完了:", payloadData.itemName, payloadData.action);
-  })
-  .catch(err => {
-    console.error("GAS送信エラー:", err);
-  });
+  }).catch(err => console.error("GAS送信エラー:", err));
 }
 
-// 時計＆時間帯自動判定
 function updateClock() {
   const now = new Date();
   const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
@@ -800,7 +843,6 @@ function getMinRatio(itemId) {
   return SCHEDULE_CONFIG[currentDayType][itemId].minRatio || 0;
 }
 
-// 廃棄アラートバー
 function updateWasteAlertBar() {
   const container = document.getElementById("wasteItemsContainer");
   const now = Date.now();
@@ -872,7 +914,6 @@ function autoFitTitles() {
   });
 }
 
-// ホーム画面描画
 function renderHomeFixtures() {
   const container = document.getElementById("homeFixturesWrapper");
   container.innerHTML = "";
@@ -1018,7 +1059,6 @@ function refreshHomeCell(cellKey) {
   updateToastBadges(cellKey);
 }
 
-// 実績画面描画
 function renderRecordTable() {
   const targetDate = document.getElementById("recordDateInput").value || getTodayDateString();
   const dayArchive = DAILY_ARCHIVES[targetDate] || {};
@@ -1052,7 +1092,6 @@ function renderRecordTable() {
   document.getElementById("sumSalesAmount").innerText = `¥${totalSalesAmt.toLocaleString()}`;
 }
 
-// 店舗マスタ描画＆保存
 function renderStoreMasterTable() {
   const tbody = document.getElementById("storeMasterBody");
   tbody.innerHTML = STORE_MASTER.map((store, idx) => `
@@ -1083,11 +1122,11 @@ function saveStoreMaster() {
     store.memo = document.getElementById(`stm-memo-${idx}`).value;
     store.isCurrent = (store.id === selectedId);
   });
-  alert(`店舗マスタを保存しました！【運用中: ${getCurrentStore().name}】`);
+  syncAllMasterToSpreadsheet();
+  alert(`店舗マスタを保存し、スプレッドシートと同期しました！【運用中: ${getCurrentStore().name}】`);
   switchView('home');
 }
 
-// 商品マスタ保存
 function renderItemMasterTable() {
   const tbody = document.getElementById("itemMasterBody");
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => `
@@ -1106,7 +1145,6 @@ function renderItemMasterTable() {
     </tr>
   `).join("");
 }
-// 商品マスタ保存＆スプレッドシート（GAS）同期
 function saveItemMaster() {
   ITEMS.forEach(item => {
     if (item.id === 0) return;
@@ -1115,23 +1153,10 @@ function saveItemMaster() {
     item.price = parseInt(document.getElementById(`im-price-${item.id}`).value) || 0;
     item.limitHour = parseFloat(document.getElementById(`im-limitHour-${item.id}`).value) || 0;
   });
-
-  // GAS（スプレッドシート）へ商品マスタを同期
-  if (GAS_ENDPOINT_URL && GAS_ENDPOINT_URL.trim() !== "") {
-    fetch(GAS_ENDPOINT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "save_item_master", payload: ITEMS })
-    }).then(() => {
-      console.log("商品マスタをスプレッドシートへ同期しました。");
-    }).catch(err => console.error("商品マスタ同期エラー:", err));
-  }
-
-  alert("商品マスタを保存し、スプレッドシートと同期しました！");
+  syncAllMasterToSpreadsheet();
+  alert("商品マスタを保存し、スプレッドシート（マスタ_商品）へ同期しました！");
 }
 
-// スケジュール＆時間帯マスタ保存
 function renderScheduleMasterTable() {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const tbody = document.getElementById("scheduleMasterBody");
@@ -1164,10 +1189,10 @@ function saveScheduleMaster() {
       minRatio: parseFloat(document.getElementById(`sm-ratio-${item.id}`).value) || 0
     };
   });
-  alert("時間帯・スケジュール目標数を保存しました！");
+  syncAllMasterToSpreadsheet();
+  alert("スケジュール設定を保存し、スプレッドシートと同期しました！");
 }
 
-// 什器配置マスタ
 function renderLayoutMasterEditor() {
   const container = document.getElementById("fixtureLayoutEditor");
   container.innerHTML = "";
@@ -1224,7 +1249,8 @@ function saveLayoutMaster() {
       if (sel) cell.itemId = parseInt(sel.value);
     });
   });
-  alert("什器配置設定を保存しました！");
+  syncAllMasterToSpreadsheet();
+  alert("什器配置設定を保存し、スプレッドシートと同期しました！");
   switchView('home');
 }
 
@@ -1232,6 +1258,9 @@ window.addEventListener('resize', autoFitTitles);
 setInterval(updateClock, 1000);
 updateClock();
 renderHomeFixtures();
+
+// 起動時にスプレッドシートから最新データを全自動ロード
+loadDataFromSpreadsheet();
 </script>
 </body>
 </html>
