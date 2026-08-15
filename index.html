@@ -1106,6 +1106,7 @@ function renderItemMasterTable() {
     </tr>
   `).join("");
 }
+// 商品マスタ保存＆スプレッドシート（GAS）同期
 function saveItemMaster() {
   ITEMS.forEach(item => {
     if (item.id === 0) return;
@@ -1114,7 +1115,20 @@ function saveItemMaster() {
     item.price = parseInt(document.getElementById(`im-price-${item.id}`).value) || 0;
     item.limitHour = parseFloat(document.getElementById(`im-limitHour-${item.id}`).value) || 0;
   });
-  alert("商品マスタを保存しました！");
+
+  // GAS（スプレッドシート）へ商品マスタを同期
+  if (GAS_ENDPOINT_URL && GAS_ENDPOINT_URL.trim() !== "") {
+    fetch(GAS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ type: "save_item_master", payload: ITEMS })
+    }).then(() => {
+      console.log("商品マスタをスプレッドシートへ同期しました。");
+    }).catch(err => console.error("商品マスタ同期エラー:", err));
+  }
+
+  alert("商品マスタを保存し、スプレッドシートと同期しました！");
 }
 
 // スケジュール＆時間帯マスタ保存
