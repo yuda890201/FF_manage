@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF什器管理</title>
+<title>FF仕込み・在庫管理</title>
 <style>
   :root {
-    --bg-main: #0a0f1d;
-    --card-bg: #151e32;
+    --bg-main: #080c16;
+    --card-bg: #131b2e;
     --card-border: #334155;
     --text-main: #f8fafc;
     --text-sub: #94a3b8;
     
     /* ぷっくり立体ボタンカラー（上：調理） */
-    --btn-cook-top: #3b82f6;
+    --btn-cook-top: #2563eb;
     --btn-cook-bottom: #1d4ed8;
     --btn-cook-bevel: #60a5fa;
     --btn-cook-shadow: #172554;
@@ -41,7 +41,7 @@
   body {
     background: var(--bg-main);
     color: var(--text-main);
-    padding: 8px;
+    padding: 6px;
     height: 100vh;
     display: flex;
     flex-direction: column;
@@ -56,30 +56,26 @@
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     padding: 4px 10px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-    height: 44px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    height: 40px;
     flex-shrink: 0;
-  }
-  .header-left {
-    display: flex;
-    align-items: center;
   }
   .nav-tabs {
     display: flex;
     gap: 4px;
     background: #0b1120;
-    padding: 3px;
-    border-radius: 8px;
+    padding: 2px;
+    border-radius: 6px;
     border: 1px solid #1e293b;
   }
   .nav-tab {
     background: transparent;
     border: none;
     color: #94a3b8;
-    padding: 5px 14px;
-    border-radius: 6px;
-    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 11px;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
@@ -97,24 +93,90 @@
   .day-badge {
     background: #475569;
     color: #f8fafc;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
     font-weight: bold;
   }
   .time-badge {
     background: #0284c7;
     color: #fff;
-    padding: 3px 10px;
-    border-radius: 6px;
+    padding: 2px 8px;
+    border-radius: 4px;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 11px;
   }
   .clock {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     font-family: "Courier New", monospace;
     color: #38bdf8;
+  }
+
+  /* ====================================================
+     上部横配置の廃棄アラートバー
+  ==================================================== */
+  .waste-alert-bar {
+    display: flex;
+    align-items: center;
+    background: #1e111a;
+    border: 1.5px solid #dc2626;
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    height: 38px;
+    flex-shrink: 0;
+    gap: 8px;
+    box-shadow: inset 0 0 8px rgba(220, 38, 38, 0.25);
+  }
+  .waste-bar-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 900;
+    color: #f87171;
+    white-space: nowrap;
+    border-right: 1px solid #7f1d1d;
+    padding-right: 8px;
+  }
+  .waste-items-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex: 1;
+    align-items: center;
+  }
+  .waste-item-chip {
+    background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%);
+    border: 1px solid #ef4444;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    animation: wastePulse 1.5s infinite alternate;
+  }
+  .waste-item-chip:active {
+    transform: scale(0.95);
+    background: #ef4444;
+  }
+  @keyframes wastePulse {
+    0% { border-color: #ef4444; }
+    100% { border-color: #fca5a5; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+  }
+  .waste-time-tag {
+    background: rgba(0, 0, 0, 0.4);
+    color: #fef08a;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
   }
 
   /* ビューコンテナ */
@@ -151,7 +213,6 @@
     height: 100%;
   }
 
-  /* 分類別境界ネオンカラー */
   .fixture-section-container[data-cat="中華まん"] { border-color: #f97316; box-shadow: inset 0 0 8px rgba(249,115,22,0.15); }
   .fixture-section-container[data-cat="ホッターズ"] { border-color: #3b82f6; box-shadow: inset 0 0 8px rgba(59,130,246,0.15); }
   .fixture-section-container[data-cat="常温総菜"] { border-color: #10b981; box-shadow: inset 0 0 8px rgba(16,185,129,0.15); }
@@ -195,14 +256,14 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 4px 6px;
+    padding: 3px 5px;
     min-height: 0;
     transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
   .capsule-btn:hover { filter: brightness(1.1); }
 
   .btn-top-cook {
-    flex: 1.2;
+    flex: 1.35;
     background: linear-gradient(180deg, var(--btn-cook-top) 0%, var(--btn-cook-bottom) 100%);
     box-shadow: 
       inset 0 1.5px 2px rgba(255, 255, 255, 0.5),
@@ -219,7 +280,7 @@
   }
 
   .btn-bottom-sell {
-    flex: 0.8;
+    flex: 0.65;
     background: linear-gradient(180deg, var(--btn-sell-top) 0%, var(--btn-sell-bottom) 100%);
     box-shadow: 
       inset 0 1.5px 2px rgba(255, 255, 255, 0.2),
@@ -236,43 +297,27 @@
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 #450a0a, 0 2px 3px rgba(0,0,0,0.4);
   }
 
-  .cell-top-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  /* 上部ボタンの最上部: +調理 */
+  .action-top-label {
+    font-size: 8.5px;
+    font-weight: 900;
+    color: #93c5fd;
+    text-align: center;
+    line-height: 1;
   }
-  .item-title {
-    font-size: 11px;
-    font-weight: 800;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+
+  /* 商品名（個数と同じぐらいの太字フォント） */
+  .item-title-large {
+    font-size: 15px;
+    font-weight: 900;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 65%;
-  }
-  .stat-max {
-    font-size: 9px;
-    color: #bfdbfe;
-    font-weight: bold;
-  }
-  .stat-max span {
-    font-weight: 900;
+    text-align: center;
     color: #ffffff;
-  }
-
-  .action-row-up {
-    display: flex;
-    justify-content: flex-start;
-    margin-top: -1px;
-  }
-  .action-pill-up {
-    font-size: 8px;
-    font-weight: 800;
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
-    padding: 0px 4px;
-    border-radius: 4px;
-    white-space: nowrap;
+    line-height: 1.1;
+    margin: 1px 0;
   }
 
   .stock-box {
@@ -283,7 +328,7 @@
     text-shadow: 0 2px 4px rgba(0,0,0,0.6);
   }
   .stock-val {
-    font-size: 21px;
+    font-size: 20px;
     font-weight: 900;
     line-height: 1;
     color: #fff;
@@ -297,7 +342,7 @@
     font-size: 10px;
     font-weight: 900;
     color: #fca5a5;
-    background: rgba(185, 28, 28, 0.7);
+    background: rgba(185, 28, 28, 0.75);
     padding: 0 4px;
     border-radius: 3px;
     border: 1px solid #ef4444;
@@ -305,36 +350,61 @@
     margin-left: 2px;
   }
 
-  .cell-bottom-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .stat-min {
-    font-size: 9px;
-    color: #94a3b8;
+  /* 境界近くに配置される最高在庫数・最低在庫数 */
+  .boundary-stat-top {
+    font-size: 8.5px;
+    color: #bfdbfe;
     font-weight: bold;
+    text-align: right;
+    line-height: 1;
+    margin-top: 1px;
   }
-  .stat-min span {
-    font-weight: 900;
-    color: #f1f5f9;
-  }
-  .action-pill-down {
-    font-size: 8px;
-    font-weight: 800;
-    background: #475569;
+  .boundary-stat-top span { font-weight: 900; color: #fff; }
+
+  .boundary-stat-bottom {
+    font-size: 8.5px;
     color: #cbd5e1;
-    padding: 1px 4px;
-    border-radius: 3px;
-    white-space: nowrap;
+    font-weight: bold;
+    text-align: right;
+    line-height: 1;
+    margin-bottom: 1px;
+  }
+  .boundary-stat-bottom span { font-weight: 900; color: #fff; }
+
+  /* 下部ボタンの最下部: -販売 */
+  .action-bottom-label {
+    font-size: 8.5px;
+    font-weight: 900;
+    color: #fca5a5;
+    text-align: center;
+    line-height: 1;
   }
 
-  .badge-toast { position: absolute; right: 4px; top: 16px; padding: 1px 5px; border-radius: 8px; font-size: 8.5px; font-weight: 900; color: #fff; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.6); z-index: 10; }
+  /* コンパクトモード（多行什器で画面が狭い場合） */
+  .cell-capsule.compact .action-top-label,
+  .cell-capsule.compact .boundary-stat-top,
+  .cell-capsule.compact .boundary-stat-bottom,
+  .cell-capsule.compact .action-bottom-label {
+    display: none !important;
+  }
+  .cell-capsule.compact .item-title-large {
+    font-size: 12px;
+    margin: 0;
+  }
+  .cell-capsule.compact .stock-val {
+    font-size: 16px;
+  }
+  .cell-capsule.compact .capsule-btn {
+    padding: 2px 4px;
+    justify-content: center;
+  }
+
+  .badge-toast { position: absolute; right: 4px; top: 14px; padding: 1px 5px; border-radius: 8px; font-size: 8px; font-weight: 900; color: #fff; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.6); z-index: 10; }
   .toast-cook { background: #10b981; border: 1px solid #34d399; }
-  .toast-sell { background: #f59e0b; top: auto; bottom: 14px; border: 1px solid #fbbf24; }
+  .toast-sell { background: #f59e0b; top: auto; bottom: 12px; border: 1px solid #fbbf24; }
 
   /* ====================================================
-     マスタ設定共通スタイル
+     マスタ設定スタイル
   ==================================================== */
   .master-wrapper {
     flex: 1;
@@ -419,9 +489,7 @@
     width: 100%;
   }
 
-  /* ====================================================
-     什器配置マスタ：自動幅調整レイアウト
-  ==================================================== */
+  /* 什器配置マスタ */
   .fixture-layout-editor {
     display: flex;
     gap: 10px;
@@ -490,6 +558,50 @@
     white-space: nowrap;
     overflow: hidden;
   }
+
+  /* 廃棄モーダル */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.75);
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  .modal-content {
+    background: #1e293b;
+    border: 1.5px solid #ef4444;
+    border-radius: 10px;
+    width: 320px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+  }
+  .modal-title { font-size: 15px; font-weight: 900; color: #f87171; }
+  .modal-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn-modal-action {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    padding: 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-modal-cancel {
+    background: #475569;
+    color: #fff;
+    border: none;
+    padding: 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -509,6 +621,16 @@
     <div id="clockDisplay" class="clock">--:--:--</div>
   </div>
 </header>
+
+<!-- ==================== 上部横配置の廃棄アラートバー ==================== -->
+<div class="waste-alert-bar" id="wasteAlertBar">
+  <div class="waste-bar-label">
+    <span>⚠️ 期限間近</span>
+  </div>
+  <div class="waste-items-scroll" id="wasteItemsContainer">
+    <!-- 廃棄アラートアイテムがリアルタイム表示されます -->
+  </div>
+</div>
 
 <!-- ==================== ホーム画面 ==================== -->
 <div id="homeView" class="view-container active">
@@ -581,8 +703,24 @@
   </div>
 </div>
 
+<!-- 廃棄処理モーダル -->
+<div class="modal-overlay" id="wasteModal">
+  <div class="modal-content">
+    <div class="modal-title" id="wasteModalTitle">廃棄登録</div>
+    <div style="font-size:12px; color:#cbd5e1;" id="wasteModalDesc"></div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <label style="font-size:12px; font-weight:bold;">廃棄個数:</label>
+      <input class="ctrl-input" style="width:80px;" type="number" id="wasteQtyInput" min="1" value="1">
+    </div>
+    <div class="modal-btn-row">
+      <button class="btn-modal-action" onclick="confirmWaste()">🗑 廃棄を実行</button>
+      <button class="btn-modal-cancel" onclick="closeWasteModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <script>
-// ① 商品マスタデータ
+// ① 商品マスタ
 let ITEMS = [
   { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
   { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
@@ -655,12 +793,18 @@ let FIXTURE_SECTIONS = [
     cols: 2,
     rows: 6,
     cells: [
-      { itemId: 9, stock: 1 }, { itemId: 0, stock: 0 },
-      { itemId: 10, stock: 5 }, { itemId: 0, stock: 0 },
-      { itemId: 11, stock: 2 }, { itemId: 0, stock: 0 },
-      { itemId: 12, stock: 1 }, { itemId: 0, stock: 0 },
-      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
-      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+      { itemId: 9, stock: 1, cookTime: Date.now() - 5.5 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 10, stock: 5, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 11, stock: 2, cookTime: Date.now() - 1.0 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 12, stock: 1, cookTime: Date.now() - 5.8 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null }
     ]
   },
   {
@@ -670,9 +814,21 @@ let FIXTURE_SECTIONS = [
     cols: 5,
     rows: 3,
     cells: [
-      { itemId: 1, stock: 8 }, { itemId: 2, stock: 6 }, { itemId: 17, stock: 2 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
-      { itemId: 3, stock: 3 }, { itemId: 4, stock: 2 }, { itemId: 5, stock: 2 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
-      { itemId: 6, stock: 4 }, { itemId: 7, stock: 2 }, { itemId: 8, stock: 1 }, { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+      { itemId: 1, stock: 8, cookTime: Date.now() - 3.7 * 3600 * 1000 },
+      { itemId: 2, stock: 6, cookTime: Date.now() - 1.5 * 3600 * 1000 },
+      { itemId: 17, stock: 2, cookTime: Date.now() - 5.2 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 3, stock: 3, cookTime: Date.now() - 0.5 * 3600 * 1000 },
+      { itemId: 4, stock: 2, cookTime: Date.now() - 1.0 * 3600 * 1000 },
+      { itemId: 5, stock: 2, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 6, stock: 4, cookTime: Date.now() - 1.0 * 3600 * 1000 },
+      { itemId: 7, stock: 2, cookTime: Date.now() - 1.0 * 3600 * 1000 },
+      { itemId: 8, stock: 1, cookTime: Date.now() - 1.0 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null }
     ]
   },
   {
@@ -682,10 +838,14 @@ let FIXTURE_SECTIONS = [
     cols: 2,
     rows: 4,
     cells: [
-      { itemId: 13, stock: 3 }, { itemId: 14, stock: 4 },
-      { itemId: 15, stock: 3 }, { itemId: 16, stock: 3 },
-      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 },
-      { itemId: 0, stock: 0 }, { itemId: 0, stock: 0 }
+      { itemId: 13, stock: 3, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 14, stock: 4, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 15, stock: 3, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 16, stock: 3, cookTime: Date.now() - 2.0 * 3600 * 1000 },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null },
+      { itemId: 0, stock: 0, cookTime: null }
     ]
   }
 ];
@@ -693,6 +853,7 @@ let FIXTURE_SECTIONS = [
 let cellBuffers = {};
 let currentScheduleKey = "lunch";
 let currentDayType = "weekday";
+let activeWasteTarget = null;
 
 function updateClock() {
   const now = new Date();
@@ -717,6 +878,9 @@ function updateClock() {
     currentScheduleKey = newKey;
     renderHomeFixtures();
   }
+
+  // リアルタイム廃棄バーの更新
+  updateWasteAlertBar();
 }
 
 function switchView(viewName) {
@@ -755,6 +919,83 @@ function calcFixtureFlex(sec) {
   return sec.cols * (sec.rows / 3);
 }
 
+// ==================== リアルタイム廃棄アラートバー ====================
+function updateWasteAlertBar() {
+  const container = document.getElementById("wasteItemsContainer");
+  const now = Date.now();
+  let nearWasteItems = [];
+
+  FIXTURE_SECTIONS.forEach((sec, sIdx) => {
+    sec.cells.forEach((cell, cIdx) => {
+      if (cell.itemId !== 0 && cell.stock > 0 && cell.cookTime) {
+        const item = ITEMS.find(i => i.id === cell.itemId);
+        if (item && item.limitHour > 0) {
+          const limitMs = item.limitHour * 3600 * 1000;
+          const elapsed = now - cell.cookTime;
+          const remainingMinutes = Math.floor((limitMs - elapsed) / 60000);
+
+          // 残り30分以内、または期限切れ
+          if (remainingMinutes <= 30) {
+            nearWasteItems.push({
+              cellKey: `${sIdx}_${cIdx}`,
+              name: item.name,
+              stock: cell.stock,
+              remainMin: remainingMinutes
+            });
+          }
+        }
+      }
+    });
+  });
+
+  if (nearWasteItems.length === 0) {
+    container.innerHTML = `<span style="font-size:11px; color:#94a3b8;">現在、廃棄期限が近いアイテムはありません</span>`;
+    return;
+  }
+
+  container.innerHTML = nearWasteItems.map(w => {
+    const timeText = w.remainMin <= 0 ? `期限切れ` : `残${w.remainMin}分`;
+    return `
+      <div class="waste-item-chip" onclick="openWasteModal('${w.cellKey}')">
+        <span>${w.name} (${w.stock}個)</span>
+        <span class="waste-time-tag">${timeText}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function openWasteModal(cellKey) {
+  const [sIdx, cIdx] = cellKey.split("_").map(Number);
+  const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
+  const item = ITEMS.find(i => i.id === cell.itemId);
+
+  activeWasteTarget = { cellKey, sIdx, cIdx };
+  document.getElementById("wasteModalTitle").innerText = `🗑 廃棄処理: ${item.name}`;
+  document.getElementById("wasteModalDesc").innerText = `現在在庫数: ${cell.stock}個 から廃棄数を減少させます。`;
+  document.getElementById("wasteQtyInput").value = cell.stock;
+  document.getElementById("wasteQtyInput").max = cell.stock;
+  document.getElementById("wasteModal").style.display = "flex";
+}
+
+function closeWasteModal() {
+  document.getElementById("wasteModal").style.display = "none";
+  activeWasteTarget = null;
+}
+
+function confirmWaste() {
+  if (!activeWasteTarget) return;
+  const { sIdx, cIdx, cellKey } = activeWasteTarget;
+  const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
+  const qty = parseInt(document.getElementById("wasteQtyInput").value) || 0;
+
+  if (qty > 0) {
+    cell.stock = Math.max(0, cell.stock - qty);
+    refreshHomeCell(cellKey);
+    updateWasteAlertBar();
+  }
+  closeWasteModal();
+}
+
 // ==================== ホーム画面 レンダリング ====================
 function renderHomeFixtures() {
   const container = document.getElementById("homeFixturesWrapper");
@@ -772,6 +1013,8 @@ function renderHomeFixtures() {
     container.appendChild(secBox);
 
     const gridEl = secBox.querySelector(`#fgrid-${sIdx}`);
+    const isCompact = sec.rows >= 5; // 5行以上ならコンパクト表示
+
     sec.cells.forEach((cell, cIdx) => {
       const cellKey = `${sIdx}_${cIdx}`;
       const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
@@ -782,33 +1025,27 @@ function renderHomeFixtures() {
       const recommendQty = Math.max(0, maxQty - cell.stock);
 
       const capsule = document.createElement("div");
-      capsule.className = `cell-capsule ${isAlert ? 'alert' : ''}`;
+      capsule.className = `cell-capsule ${isAlert ? 'alert' : ''} ${isCompact ? 'compact' : ''}`;
       capsule.id = `capsule-${cellKey}`;
 
       capsule.innerHTML = `
-        <!-- 上ボタン：調理（＋）＆ 最高在庫数表示 -->
+        <!-- 上ボタン：調理（＋） -->
         <div class="capsule-btn btn-top-cook" onclick="handleTouch('${cellKey}', 'cook')">
-          <div class="cell-top-header">
-            <span class="item-title">${item.name}</span>
-            <div class="stat-max">最高: <span>${cell.itemId === 0 ? '-' : maxQty}</span></div>
-          </div>
-          <div class="action-row-up">
-            <span class="action-pill-up">＋調理</span>
-          </div>
+          <div class="action-top-label">▲ ＋調理</div>
+          <div class="item-title-large">${item.name}</div>
           <div class="stock-box">
             <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
             <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
             <span class="rec-inline" id="rec-${cellKey}" style="display: ${showRecommend ? 'inline-block' : 'none'};">+${recommendQty}</span>
           </div>
+          <div class="boundary-stat-top">最高: <span>${cell.itemId === 0 ? '-' : maxQty}</span></div>
           <div class="badge-toast toast-cook" id="cook-badge-${cellKey}"></div>
         </div>
 
-        <!-- 下ボタン：販売（−）＆ 最低在庫数表示 -->
+        <!-- 下ボタン：販売（−） -->
         <div class="capsule-btn btn-bottom-sell" onclick="handleTouch('${cellKey}', 'sell')">
-          <div class="cell-bottom-row">
-            <div class="stat-min">最低: <span>${cell.itemId === 0 ? '-' : minQty}</span></div>
-            <span class="action-pill-down">−販売</span>
-          </div>
+          <div class="boundary-stat-bottom">最低: <span>${cell.itemId === 0 ? '-' : minQty}</span></div>
+          <div class="action-bottom-label">▼ −販売</div>
           <div class="badge-toast toast-sell" id="sell-badge-${cellKey}"></div>
         </div>
       `;
@@ -831,6 +1068,7 @@ function handleTouch(cellKey, type) {
 
   if (type === 'cook') {
     cell.stock++;
+    cell.cookTime = Date.now(); // 調理時間を記録（鮮度管理用）
     buf.cook++;
     startCommitTimer(cellKey, 'cook');
   } else {
@@ -841,6 +1079,7 @@ function handleTouch(cellKey, type) {
     }
   }
   refreshHomeCell(cellKey);
+  updateWasteAlertBar();
 }
 
 function startCommitTimer(cellKey, type) {
@@ -1047,7 +1286,7 @@ function resizeFixture(sIdx) {
     if (i < currentCells.length) {
       updatedCells.push(currentCells[i]);
     } else {
-      updatedCells.push({ itemId: 0, stock: 0 });
+      updatedCells.push({ itemId: 0, stock: 0, cookTime: null });
     }
   }
 
