@@ -1004,7 +1004,7 @@ function startCommitTimer(cellKey, type) {
 
   if (type === 'cook') {
     if (buf.cookTimer) clearInterval(buf.cookTimer);
-    buf.cookSec = 60;
+    buf.cookSec = 10;
     buf.cookTimer = setInterval(() => {
       buf.cookSec--;
       if (buf.cookSec <= 0) {
@@ -1017,7 +1017,7 @@ function startCommitTimer(cellKey, type) {
     }, 1000);
   } else {
     if (buf.sellTimer) clearInterval(buf.sellTimer);
-    buf.sellSec = 60;
+    buf.sellSec = 10;
     buf.sellTimer = setInterval(() => {
       buf.sellSec--;
       if (buf.sellSec <= 0) {
