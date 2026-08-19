@@ -203,6 +203,7 @@
     flex-direction: column;
   }
 
+  /* ホーム画面レイアウト */
   .home-fixtures-wrapper {
     display: flex;
     gap: 8px;
@@ -290,6 +291,7 @@
   .toast-cook { background: #10b981; }
   .toast-sell { background: #f59e0b; top: auto; bottom: 12px; }
 
+  /* マスタ・共通スタイル */
   .master-wrapper {
     flex: 1;
     background: var(--card-bg);
@@ -340,6 +342,111 @@
 
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ====================================================
+     A4印刷（什器陳列・仕込み計画表：平日・土日各1枚）
+  ==================================================== */
+  #printSheetContainer { display: none; }
+
+  @media print {
+    @page {
+      size: A4 landscape; /* 横向きで全什器を一覧配置 */
+      margin: 8mm;
+    }
+    body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      padding: 0 !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    header, .waste-alert-bar, .view-container, .modal-overlay {
+      display: none !important;
+    }
+    #printSheetContainer {
+      display: block !important;
+      background: #ffffff !important;
+    }
+    .print-page {
+      page-break-after: always;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .print-page:last-child {
+      page-break-after: avoid;
+    }
+    .print-header {
+      border-bottom: 2px solid #000;
+      padding-bottom: 4px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .print-title { font-size: 16pt; font-weight: bold; }
+    .print-meta { font-size: 9pt; }
+    .print-fixtures-wrap {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      height: 165mm;
+    }
+    .print-sec-box {
+      border: 1.5px solid #000;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      padding: 3px;
+    }
+    .print-sec-title {
+      font-size: 9pt;
+      font-weight: bold;
+      background: #e2e8f0;
+      padding: 2px 4px;
+      margin-bottom: 3px;
+      border-bottom: 1px solid #000;
+      text-align: center;
+    }
+    .print-sec-grid {
+      display: grid;
+      gap: 3px;
+      flex: 1;
+    }
+    .print-cell-box {
+      border: 1px solid #475569;
+      border-radius: 3px;
+      padding: 2px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #fff;
+    }
+    .print-cell-name {
+      font-size: 8.5pt;
+      font-weight: bold;
+      line-height: 1.1;
+      border-bottom: 0.5px solid #cbd5e1;
+      padding-bottom: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .print-cell-targets {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      text-align: center;
+      margin-top: 1px;
+    }
+    .print-target-col {
+      background: #f1f5f9;
+      border-radius: 2px;
+      padding: 1px;
+    }
+    .print-t-lbl { font-size: 6.5pt; color: #475569; }
+    .print-t-val { font-size: 8.5pt; font-weight: bold; }
+  }
 </style>
 </head>
 <body>
@@ -369,10 +476,12 @@
   <div class="waste-items-scroll" id="wasteItemsContainer"></div>
 </div>
 
+<!-- ホーム画面 -->
 <div id="homeView" class="view-container active">
   <div class="home-fixtures-wrapper" id="homeFixturesWrapper"></div>
 </div>
 
+<!-- 実績画面 -->
 <div id="recordView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -380,7 +489,7 @@
         <span class="master-title">📊 日別 実績アーカイブ</span>
         <input type="date" id="recordDateInput" class="ctrl-input" style="width:120px;" onchange="renderRecordTable()">
       </div>
-      <button class="btn-save-action" style="background:#0284c7;" onclick="window.print()">🖨️ 印刷プレビュー</button>
+      <button class="btn-save-action" style="background:#0284c7;" onclick="window.print()">🖨️ 実績帳票を印刷</button>
     </div>
     <div class="summary-cards">
       <div class="summary-card"><div class="summary-label">総調理数</div><div class="summary-value" id="sumCookQty" style="color:#38bdf8;">0 個</div></div>
@@ -403,6 +512,7 @@
   </div>
 </div>
 
+<!-- 店舗マスタ画面 -->
 <div id="storeMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -429,6 +539,7 @@
   </div>
 </div>
 
+<!-- 商品マスタ画面 -->
 <div id="itemMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -449,11 +560,13 @@
   </div>
 </div>
 
+<!-- スケジュール＆時間帯マスタ画面 -->
 <div id="scheduleMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">⏰ 時間帯区分設定 ＆ 最高在庫数マスタ</div>
       <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn-save-action" style="background:#0284c7;" onclick="printPlanSheets()">🖨️ 紙の什器陳列表を印刷 (平日/土日)</button>
         <select id="scheduleDaySelect" class="ctrl-select" style="width:90px;" onchange="renderScheduleMasterTable()">
           <option value="weekday">平日</option><option value="weekend">土日祝</option>
         </select>
@@ -486,16 +599,21 @@
   </div>
 </div>
 
+<!-- 什器配置マスタ画面 -->
 <div id="layoutMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">📐 店舗別 什器配置マスタ</div>
-      <button class="btn-save-action" onclick="saveLayoutMaster()">💾 保存して全店同期</button>
+      <div style="display:flex; gap:6px;">
+        <button class="btn-save-action" style="background:#0284c7;" onclick="printPlanSheets()">🖨️ 紙の什器陳列表を印刷</button>
+        <button class="btn-save-action" onclick="saveLayoutMaster()">💾 保存して全店同期</button>
+      </div>
     </div>
     <div class="fixture-layout-editor" id="fixtureLayoutEditor"></div>
   </div>
 </div>
 
+<!-- 廃棄モーダル -->
 <div class="modal-overlay" id="wasteModal">
   <div class="modal-content">
     <div style="font-size:13px; font-weight:900; color:#f87171;" id="wasteModalTitle">廃棄登録</div>
@@ -509,6 +627,9 @@
     </div>
   </div>
 </div>
+
+<!-- ==================== 印刷用コンテナ（平日版・土日祝版 A4 2枚組） ==================== -->
+<div id="printSheetContainer"></div>
 
 <script>
 // GASのウェブアプリURL
@@ -671,7 +792,7 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// === 初期自動ロード（スプレッドシートから全設定と今日の実績を復元） ===
+// 初期ロード
 function loadDataFromSpreadsheet() {
   const indicator = document.getElementById("syncStatus");
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
@@ -712,7 +833,6 @@ function loadDataFromSpreadsheet() {
     });
 }
 
-// === 全マスタの一括保存＆スプレッドシート同期 ===
 function syncAllMasterToSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
@@ -734,7 +854,6 @@ function syncAllMasterToSpreadsheet() {
   }).catch(err => console.error("Sync Error:", err));
 }
 
-// 実績ログの送信
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -997,6 +1116,7 @@ function handleTouch(cellKey, type) {
   updateWasteAlertBar();
 }
 
+// 10秒確定タイマー
 function startCommitTimer(cellKey, type) {
   const [sIdx, cIdx] = cellKey.split("_").map(Number);
   const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
@@ -1254,12 +1374,109 @@ function saveLayoutMaster() {
   switchView('home');
 }
 
+// ==================== 紙の什器陳列表（平日/土日 A4 2枚）印刷生成 ====================
+function printPlanSheets() {
+  const container = document.getElementById("printSheetContainer");
+  const store = getCurrentStore();
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+
+  const dayTypes = [
+    { key: "weekday", label: "平日版 (月〜金)" },
+    { key: "weekend", label: "土日祝版 (土・日・祝)" }
+  ];
+
+  let pagesHtml = "";
+
+  dayTypes.forEach(dt => {
+    const configMap = SCHEDULE_CONFIG[dt.key];
+
+    let fixturesHtml = "";
+    FIXTURE_SECTIONS.forEach(sec => {
+      let cellsHtml = "";
+      sec.cells.forEach(cell => {
+        const item = ITEMS.find(i => i.id === cell.itemId) || ITEMS[0];
+        const t = configMap[cell.itemId] || { morning: 0, lunch: 0, evening: 0, minRatio: 0.4 };
+
+        if (cell.itemId === 0) {
+          cellsHtml += `
+            <div class="print-cell-box" style="background:#f8fafc; border-style:dashed;">
+              <div class="print-cell-name" style="color:#94a3b8;">（空き）</div>
+              <div style="font-size:7pt; color:#cbd5e1; text-align:center;">-</div>
+            </div>
+          `;
+        } else {
+          const mMin = Math.ceil(t.morning * t.minRatio);
+          const lMin = Math.ceil(t.lunch * t.minRatio);
+          const eMin = Math.ceil(t.evening * t.minRatio);
+
+          cellsHtml += `
+            <div class="print-cell-box">
+              <div class="print-cell-name">
+                <span>${item.name}</span>
+                <span style="font-size:7pt; color:#64748b; font-weight:normal; float:right;">¥${item.price}</span>
+              </div>
+              <div class="print-cell-targets">
+                <div class="print-target-col">
+                  <div class="print-t-lbl">朝(${TIME_SLOTS.morning.startHour}〜)</div>
+                  <div class="print-t-val">${t.morning}<span style="font-size:6pt; font-weight:normal; color:#64748b;">(低${mMin})</span></div>
+                </div>
+                <div class="print-target-col" style="background:#e0f2fe;">
+                  <div class="print-t-lbl" style="color:#0369a1;">昼(${TIME_SLOTS.lunch.startHour}〜)</div>
+                  <div class="print-t-val" style="color:#0369a1;">${t.lunch}<span style="font-size:6pt; font-weight:normal; color:#0284c7;">(低${lMin})</span></div>
+                </div>
+                <div class="print-target-col">
+                  <div class="print-t-lbl">夕(${TIME_SLOTS.evening.startHour}〜)</div>
+                  <div class="print-t-val">${t.evening}<span style="font-size:6pt; font-weight:normal; color:#64748b;">(低${eMin})</span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      });
+
+      fixturesHtml += `
+        <div class="print-sec-box" style="flex:${sec.cols} 1 0%;">
+          <div class="print-sec-title">${sec.name} (${sec.rows}段×${sec.cols}列)</div>
+          <div class="print-sec-grid" style="grid-template-columns:repeat(${sec.cols}, 1fr); grid-template-rows:repeat(${sec.rows}, 1fr);">
+            ${cellsHtml}
+          </div>
+        </div>
+      `;
+    });
+
+    pagesHtml += `
+      <div class="print-page">
+        <div class="print-header">
+          <div>
+            <span class="print-title">FF什器陳列・仕込み基準計画表 【${dt.label}】</span>
+            <span style="font-size:11pt; margin-left:12px; font-weight:bold;">${store.name}</span>
+          </div>
+          <div class="print-meta">
+            <span>出力日: ${dateStr}</span> | <span>※(低N)は最低陳列基準</span>
+          </div>
+        </div>
+        <div class="print-fixtures-wrap">
+          ${fixturesHtml}
+        </div>
+        <div style="font-size:8pt; color:#475569; display:flex; justify-content:space-between; border-top:1px solid #000; padding-top:2px;">
+          <span>【運用ルール】陳列数が最低基準を下回った場合は直ちに仕込み・調理を実施すること / 販売期限切れは廃棄登録すること</span>
+          <span>A4 1枚運用シート</span>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = pagesHtml;
+  window.print();
+}
+
 window.addEventListener('resize', autoFitTitles);
 setInterval(updateClock, 1000);
 updateClock();
 renderHomeFixtures();
 
-// 起動時にスプレッドシートから最新データを全自動ロード
+// 起動時にスプレッドシートから自動復元
 loadDataFromSpreadsheet();
 </script>
 </body>
