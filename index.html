@@ -116,13 +116,16 @@
     gap: 6px;
   }
   .day-badge {
-    background: #475569;
     color: #f8fafc;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 10px;
     font-weight: bold;
   }
+  .day-badge.weekday { background: #475569; }
+  .day-badge.saturday { background: #0284c7; }
+  .day-badge.sunday { background: #dc2626; }
+
   .time-badge {
     background: #1d4ed8;
     color: #fff;
@@ -203,7 +206,6 @@
     flex-direction: column;
   }
 
-  /* ホーム画面レイアウト */
   .home-fixtures-wrapper {
     display: flex;
     gap: 8px;
@@ -291,7 +293,6 @@
   .toast-cook { background: #10b981; }
   .toast-sell { background: #f59e0b; top: auto; bottom: 12px; }
 
-  /* マスタ・共通スタイル */
   .master-wrapper {
     flex: 1;
     background: var(--card-bg);
@@ -343,14 +344,12 @@
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 
-  /* ====================================================
-     A4印刷（什器陳列・仕込み計画表：平日・土日各1枚）
-  ==================================================== */
+  /* 印刷スタイル（平日・土曜・日祝 A4横 3枚組） */
   #printSheetContainer { display: none; }
 
   @media print {
     @page {
-      size: A4 landscape; /* 横向きで全什器を一覧配置 */
+      size: A4 landscape;
       margin: 8mm;
     }
     body {
@@ -465,7 +464,7 @@
     </div>
   </div>
   <div class="header-right">
-    <div id="dayBadge" class="day-badge">平日</div>
+    <div id="dayBadge" class="day-badge weekday">平日</div>
     <div id="scheduleBadge" class="time-badge">昼 (11:00〜)</div>
     <div id="clockDisplay" class="clock">--:--:--</div>
   </div>
@@ -560,15 +559,17 @@
   </div>
 </div>
 
-<!-- スケジュール＆時間帯マスタ画面 -->
+<!-- スケジュール＆時間帯マスタ画面（平日・土曜・日祝の3パターン切替） -->
 <div id="scheduleMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
-      <div class="master-title">⏰ 時間帯区分設定 ＆ 最高在庫数マスタ</div>
+      <div class="master-title">⏰ 時間帯区分 ＆ 最高在庫数マスタ（3パターン設定）</div>
       <div style="display:flex; gap:8px; align-items:center;">
-        <button class="btn-save-action" style="background:#0284c7;" onclick="printPlanSheets()">🖨️ 紙の什器陳列表を印刷 (平日/土日)</button>
-        <select id="scheduleDaySelect" class="ctrl-select" style="width:90px;" onchange="renderScheduleMasterTable()">
-          <option value="weekday">平日</option><option value="weekend">土日祝</option>
+        <button class="btn-save-action" style="background:#0284c7;" onclick="printPlanSheets()">🖨️ 紙の什器陳列表を印刷 (平日/土曜/日祝)</button>
+        <select id="scheduleDaySelect" class="ctrl-select" style="width:100px;" onchange="renderScheduleMasterTable()">
+          <option value="weekday">平日 (月〜金)</option>
+          <option value="saturday">土曜</option>
+          <option value="sunday">日祝</option>
         </select>
         <button class="btn-save-action" onclick="saveScheduleMaster()">💾 保存して全店同期</button>
       </div>
@@ -628,11 +629,10 @@
   </div>
 </div>
 
-<!-- ==================== 印刷用コンテナ（平日版・土日祝版 A4 2枚組） ==================== -->
+<!-- 印刷用コンテナ（平日・土曜・日祝 A4 3枚組） -->
 <div id="printSheetContainer"></div>
 
 <script>
-// GASのウェブアプリURL
 const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
 
 // ① 店舗マスタ初期値
@@ -669,7 +669,7 @@ let ITEMS = [
   { id: 17, name: "ジャンボフランク", category: "ホッターズ", price: 190, limitHour: 6 }
 ];
 
-// ③ スケジュール初期値
+// ③ スケジュール初期値（平日・土曜・日祝の3パターン）
 let SCHEDULE_CONFIG = {
   weekday: {
     1: { morning: 8, lunch: 12, evening: 12, minRatio: 0.4 },
@@ -690,7 +690,26 @@ let SCHEDULE_CONFIG = {
     16: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 },
     17: { morning: 2, lunch: 2, evening: 3, minRatio: 0.5 }
   },
-  weekend: {
+  saturday: {
+    1: { morning: 9, lunch: 14, evening: 15, minRatio: 0.4 },
+    2: { morning: 7, lunch: 13, evening: 13, minRatio: 0.4 },
+    3: { morning: 4, lunch: 5, evening: 4, minRatio: 0.5 },
+    4: { morning: 3, lunch: 5, evening: 3, minRatio: 0.5 },
+    5: { morning: 3, lunch: 3, evening: 3, minRatio: 0.5 },
+    6: { morning: 5, lunch: 5, evening: 5, minRatio: 0.5 },
+    7: { morning: 3, lunch: 5, evening: 5, minRatio: 0.5 },
+    8: { morning: 2, lunch: 3, evening: 3, minRatio: 0.5 },
+    9: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
+    10: { morning: 7, lunch: 7, evening: 17, minRatio: 0.3 },
+    11: { morning: 3, lunch: 3, evening: 3, minRatio: 0.3 },
+    12: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
+    13: { morning: 4, lunch: 5, evening: 6, minRatio: 0.5 },
+    14: { morning: 5, lunch: 5, evening: 7, minRatio: 0.5 },
+    15: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
+    16: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
+    17: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 }
+  },
+  sunday: {
     1: { morning: 10, lunch: 16, evening: 16, minRatio: 0.4 },
     2: { morning: 8, lunch: 14, evening: 14, minRatio: 0.4 },
     3: { morning: 4, lunch: 6, evening: 4, minRatio: 0.5 },
@@ -780,7 +799,7 @@ let FIXTURE_SECTIONS = [
 let DAILY_ARCHIVES = {};
 let cellBuffers = {};
 let currentScheduleKey = "lunch";
-let currentDayType = "weekday";
+let currentDayType = "weekday"; // "weekday" | "saturday" | "sunday"
 let activeWasteTarget = null;
 
 function getCurrentStore() {
@@ -813,7 +832,16 @@ function loadDataFromSpreadsheet() {
         }
         if (data.config) {
           if (data.config.fixtures) FIXTURE_SECTIONS = data.config.fixtures;
-          if (data.config.schedule) SCHEDULE_CONFIG = data.config.schedule;
+          if (data.config.schedule) {
+            SCHEDULE_CONFIG = data.config.schedule;
+            // 既存のweekendキーがあればsunday/saturdayにフォールバック
+            if (!SCHEDULE_CONFIG.saturday && SCHEDULE_CONFIG.weekend) {
+              SCHEDULE_CONFIG.saturday = JSON.parse(JSON.stringify(SCHEDULE_CONFIG.weekend));
+            }
+            if (!SCHEDULE_CONFIG.sunday && SCHEDULE_CONFIG.weekend) {
+              SCHEDULE_CONFIG.sunday = JSON.parse(JSON.stringify(SCHEDULE_CONFIG.weekend));
+            }
+          }
           if (data.config.timeSlots) TIME_SLOTS = data.config.timeSlots;
         }
         if (data.todayRecords) {
@@ -896,13 +924,26 @@ function recordArchiveAndSync(itemId, type, qty) {
   }).catch(err => console.error("GAS送信エラー:", err));
 }
 
+// 時計＆「平日・土曜・日祝」の自動判定
 function updateClock() {
   const now = new Date();
   const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
   const day = now.getDay();
   
-  currentDayType = (day === 0 || day === 6) ? "weekend" : "weekday";
-  document.getElementById("dayBadge").innerText = currentDayType === "weekend" ? "土日祝" : "平日";
+  // 曜日判定（0:日, 6:土, 1〜5:平日）
+  let prevDayType = currentDayType;
+  if (day === 6) {
+    currentDayType = "saturday";
+  } else if (day === 0) {
+    currentDayType = "sunday";
+  } else {
+    currentDayType = "weekday";
+  }
+
+  const badge = document.getElementById("dayBadge");
+  badge.className = `day-badge ${currentDayType}`;
+  badge.innerText = (currentDayType === "saturday") ? "土曜" : (currentDayType === "sunday" ? "日祝" : "平日");
+
   document.getElementById("clockDisplay").innerText = 
     `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
@@ -914,12 +955,12 @@ function updateClock() {
     newKey = "lunch"; label = "昼";
   }
 
-  const badge = document.getElementById("scheduleBadge");
-  if (badge.innerText !== `${label} (${TIME_SLOTS[newKey].startHour}:00〜)`) {
-    badge.innerText = `${label} (${TIME_SLOTS[newKey].startHour}:00〜)`;
+  const sBadge = document.getElementById("scheduleBadge");
+  if (sBadge.innerText !== `${label} (${TIME_SLOTS[newKey].startHour}:00〜)`) {
+    sBadge.innerText = `${label} (${TIME_SLOTS[newKey].startHour}:00〜)`;
   }
 
-  if (currentScheduleKey !== newKey) {
+  if (currentScheduleKey !== newKey || prevDayType !== currentDayType) {
     currentScheduleKey = newKey;
     renderHomeFixtures();
   }
@@ -954,12 +995,16 @@ function switchView(viewName) {
 }
 
 function getTargetMax(itemId) {
-  if (itemId === 0 || !SCHEDULE_CONFIG[currentDayType][itemId]) return 0;
-  return SCHEDULE_CONFIG[currentDayType][itemId][currentScheduleKey] || 0;
+  if (itemId === 0) return 0;
+  const config = SCHEDULE_CONFIG[currentDayType] || SCHEDULE_CONFIG.weekday;
+  if (!config || !config[itemId]) return 0;
+  return config[itemId][currentScheduleKey] || 0;
 }
 function getMinRatio(itemId) {
-  if (itemId === 0 || !SCHEDULE_CONFIG[currentDayType][itemId]) return 0;
-  return SCHEDULE_CONFIG[currentDayType][itemId].minRatio || 0;
+  if (itemId === 0) return 0;
+  const config = SCHEDULE_CONFIG[currentDayType] || SCHEDULE_CONFIG.weekday;
+  if (!config || !config[itemId]) return 0;
+  return config[itemId].minRatio || 0;
 }
 
 function updateWasteAlertBar() {
@@ -1116,7 +1161,6 @@ function handleTouch(cellKey, type) {
   updateWasteAlertBar();
 }
 
-// 10秒確定タイマー
 function startCommitTimer(cellKey, type) {
   const [sIdx, cIdx] = cellKey.split("_").map(Number);
   const cell = FIXTURE_SECTIONS[sIdx].cells[cIdx];
@@ -1280,7 +1324,7 @@ function saveItemMaster() {
 function renderScheduleMasterTable() {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const tbody = document.getElementById("scheduleMasterBody");
-  const targetMap = SCHEDULE_CONFIG[dayType];
+  const targetMap = SCHEDULE_CONFIG[dayType] || SCHEDULE_CONFIG.weekday;
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => {
     const t = targetMap[item.id] || { morning: 0, lunch: 0, evening: 0, minRatio: 0.4 };
     return `
@@ -1300,6 +1344,8 @@ function saveScheduleMaster() {
   TIME_SLOTS.lunch.startHour = parseInt(document.getElementById("slot-lunch-start").value) || 11;
   TIME_SLOTS.evening.startHour = parseInt(document.getElementById("slot-evening-start").value) || 16;
 
+  if (!SCHEDULE_CONFIG[dayType]) SCHEDULE_CONFIG[dayType] = {};
+
   ITEMS.forEach(item => {
     if (item.id === 0) return;
     SCHEDULE_CONFIG[dayType][item.id] = {
@@ -1310,7 +1356,7 @@ function saveScheduleMaster() {
     };
   });
   syncAllMasterToSpreadsheet();
-  alert("スケジュール設定を保存し、スプレッドシートと同期しました！");
+  alert(`スケジュール設定（${dayType === 'weekday' ? '平日' : (dayType === 'saturday' ? '土曜' : '日祝')}）を保存し、スプレッドシートと同期しました！`);
 }
 
 function renderLayoutMasterEditor() {
@@ -1374,7 +1420,7 @@ function saveLayoutMaster() {
   switchView('home');
 }
 
-// ==================== 紙の什器陳列表（平日/土日 A4 2枚）印刷生成 ====================
+// ==================== 紙の什器陳列表（平日・土曜・日祝 A4 3枚組）印刷生成 ====================
 function printPlanSheets() {
   const container = document.getElementById("printSheetContainer");
   const store = getCurrentStore();
@@ -1383,13 +1429,14 @@ function printPlanSheets() {
 
   const dayTypes = [
     { key: "weekday", label: "平日版 (月〜金)" },
-    { key: "weekend", label: "土日祝版 (土・日・祝)" }
+    { key: "saturday", label: "土曜版 (土)" },
+    { key: "sunday", label: "日祝版 (日・祝)" }
   ];
 
   let pagesHtml = "";
 
   dayTypes.forEach(dt => {
-    const configMap = SCHEDULE_CONFIG[dt.key];
+    const configMap = SCHEDULE_CONFIG[dt.key] || SCHEDULE_CONFIG.weekday;
 
     let fixturesHtml = "";
     FIXTURE_SECTIONS.forEach(sec => {
@@ -1476,7 +1523,6 @@ setInterval(updateClock, 1000);
 updateClock();
 renderHomeFixtures();
 
-// 起動時にスプレッドシートから自動復元
 loadDataFromSpreadsheet();
 </script>
 </body>
