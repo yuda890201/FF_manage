@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF仕込み・在庫管理コンソール</title>
+<title>FF管理アプリ</title>
   <link rel="apple-touch-icon" href="ff_manage.jpg">
   <link rel="icon" type="image/png" href="ff_manage.jpg">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,7 +64,7 @@
   .header-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
   .store-badge {
     background: #0284c7;
@@ -77,14 +77,31 @@
     align-items: center;
     gap: 4px;
   }
-  .sync-indicator {
-    font-size: 9px;
-    padding: 2px 5px;
-    border-radius: 4px;
-    background: #334155;
-    color: #94a3b8;
+  .btn-global-save {
+    background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 2px 0 #064e3b;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.15s ease;
   }
-  .sync-indicator.online { background: #166534; color: #4ade80; }
+  .btn-global-save:active { transform: translateY(2px); box-shadow: none; }
+  .btn-global-save.has-unsaved {
+    background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.8), 0 2px 0 #78350f;
+    animation: saveAlert 1.2s infinite alternate;
+  }
+  @keyframes saveAlert {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.05); }
+  }
 
   .nav-tabs {
     display: flex;
@@ -341,108 +358,65 @@
   .fixture-matrix-edit { display: grid; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; padding: 3px; background: #070c18; border-radius: 6px; }
   .edit-cell-box { background: #1e293b; border: 1px dashed #475569; border-radius: 4px; padding: 2px; }
 
+  /* 同期・保存中の全画面ロックオーバーレイ */
+  .sync-lock-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(8, 12, 22, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+  }
+  .sync-spinner {
+    width: 46px;
+    height: 46px;
+    border: 4px solid #334155;
+    border-top: 4px solid #38bdf8;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .sync-lock-text {
+    font-size: 14px;
+    font-weight: 900;
+    color: #f8fafc;
+    letter-spacing: 0.5px;
+  }
+  .sync-lock-subtext {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 
-  /* 印刷スタイル（平日・土曜・日祝 A4横 3枚組） */
   #printSheetContainer { display: none; }
 
   @media print {
-    @page {
-      size: A4 landscape;
-      margin: 8mm;
-    }
-    body {
-      background: #ffffff !important;
-      color: #000000 !important;
-      padding: 0 !important;
-      height: auto !important;
-      overflow: visible !important;
-    }
-    header, .waste-alert-bar, .view-container, .modal-overlay {
-      display: none !important;
-    }
-    #printSheetContainer {
-      display: block !important;
-      background: #ffffff !important;
-    }
-    .print-page {
-      page-break-after: always;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .print-page:last-child {
-      page-break-after: avoid;
-    }
-    .print-header {
-      border-bottom: 2px solid #000;
-      padding-bottom: 4px;
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-    }
+    @page { size: A4 landscape; margin: 8mm; }
+    body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+    header, .waste-alert-bar, .view-container, .modal-overlay, .sync-lock-overlay { display: none !important; }
+    #printSheetContainer { display: block !important; background: #ffffff !important; }
+    .print-page { page-break-after: always; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+    .print-page:last-child { page-break-after: avoid; }
+    .print-header { border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: flex-end; }
     .print-title { font-size: 16pt; font-weight: bold; }
     .print-meta { font-size: 9pt; }
-    .print-fixtures-wrap {
-      display: flex;
-      gap: 6px;
-      flex: 1;
-      height: 165mm;
-    }
-    .print-sec-box {
-      border: 1.5px solid #000;
-      border-radius: 4px;
-      display: flex;
-      flex-direction: column;
-      padding: 3px;
-    }
-    .print-sec-title {
-      font-size: 9pt;
-      font-weight: bold;
-      background: #e2e8f0;
-      padding: 2px 4px;
-      margin-bottom: 3px;
-      border-bottom: 1px solid #000;
-      text-align: center;
-    }
-    .print-sec-grid {
-      display: grid;
-      gap: 3px;
-      flex: 1;
-    }
-    .print-cell-box {
-      border: 1px solid #475569;
-      border-radius: 3px;
-      padding: 2px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      background: #fff;
-    }
-    .print-cell-name {
-      font-size: 8.5pt;
-      font-weight: bold;
-      line-height: 1.1;
-      border-bottom: 0.5px solid #cbd5e1;
-      padding-bottom: 1px;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-    .print-cell-targets {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      text-align: center;
-      margin-top: 1px;
-    }
-    .print-target-col {
-      background: #f1f5f9;
-      border-radius: 2px;
-      padding: 1px;
-    }
+    .print-fixtures-wrap { display: flex; gap: 6px; flex: 1; height: 165mm; }
+    .print-sec-box { border: 1.5px solid #000; border-radius: 4px; display: flex; flex-direction: column; padding: 3px; }
+    .print-sec-title { font-size: 9pt; font-weight: bold; background: #e2e8f0; padding: 2px 4px; margin-bottom: 3px; border-bottom: 1px solid #000; text-align: center; }
+    .print-sec-grid { display: grid; gap: 3px; flex: 1; }
+    .print-cell-box { border: 1px solid #475569; border-radius: 3px; padding: 2px; display: flex; flex-direction: column; justify-content: space-between; background: #fff; }
+    .print-cell-name { font-size: 8.5pt; font-weight: bold; line-height: 1.1; border-bottom: 0.5px solid #cbd5e1; padding-bottom: 1px; white-space: nowrap; overflow: hidden; }
+    .print-cell-targets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; text-align: center; margin-top: 1px; }
+    .print-target-col { background: #f1f5f9; border-radius: 2px; padding: 1px; }
     .print-t-lbl { font-size: 6.5pt; color: #475569; }
     .print-t-val { font-size: 8.5pt; font-weight: bold; }
   }
@@ -450,17 +424,24 @@
 </head>
 <body>
 
+<!-- 全画面ロック・同期中オーバーレイ -->
+<div class="sync-lock-overlay" id="syncLockOverlay">
+  <div class="sync-spinner"></div>
+  <div class="sync-lock-text" id="syncLockTitle">クラウドと同期中...</div>
+  <div class="sync-lock-subtext" id="syncLockDesc">画面を操作せずにお待ちください</div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
-    <div class="sync-indicator" id="syncStatus">🔄 同期中...</div>
+    <button class="btn-global-save" id="btnGlobalSave" onclick="handleManualSave()">💾 保存 (Save)</button>
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchView('home')">ホーム</button>
-      <button class="nav-tab" onclick="switchView('record')">📊 実績</button>
-      <button class="nav-tab" onclick="switchView('storeMaster')">🏪 店舗マスタ</button>
-      <button class="nav-tab" onclick="switchView('itemMaster')">① 商品マスタ</button>
-      <button class="nav-tab" onclick="switchView('scheduleMaster')">② スケジュール目標</button>
-      <button class="nav-tab" onclick="switchView('layoutMaster')">③ 什器配置</button>
+      <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
+      <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
+      <button class="nav-tab" onclick="switchViewWithSave('storeMaster')">🏪 店舗マスタ</button>
+      <button class="nav-tab" onclick="switchViewWithSave('itemMaster')">① 商品マスタ</button>
+      <button class="nav-tab" onclick="switchViewWithSave('scheduleMaster')">② スケジュール目標</button>
+      <button class="nav-tab" onclick="switchViewWithSave('layoutMaster')">③ 什器配置</button>
     </div>
   </div>
   <div class="header-right">
@@ -518,7 +499,7 @@
       <div class="master-title">🏪 店舗マスタ（端末ごとの運用店舗選択・追加編集）</div>
       <div style="display:flex; gap:6px;">
         <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewStoreRow()">＋ 店舗追加</button>
-        <button class="btn-save-action" onclick="saveStoreMaster()">💾 店舗選択・マスタ保存</button>
+        <button class="btn-save-action" onclick="saveStoreMaster()">💾 店舗選択・保存</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -538,7 +519,7 @@
   </div>
 </div>
 
-<!-- 商品マスタ画面（全店統一） -->
+<!-- 商品マスタ画面 -->
 <div id="itemMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -559,7 +540,7 @@
   </div>
 </div>
 
-<!-- スケジュール＆時間帯マスタ画面（選択中店舗専用） -->
+<!-- スケジュールマスタ画面 -->
 <div id="scheduleMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -576,13 +557,13 @@
     </div>
     <div style="display:flex; gap:8px; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00">〜
+        <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>昼:</span><input class="ctrl-input" style="width:50px;" id="slot-lunch-start" value="11:00">〜
+        <span>昼:</span><input class="ctrl-input" style="width:50px;" id="slot-lunch-start" value="11:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00">〜
+        <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00" onchange="markUnsaved()">〜
       </div>
     </div>
     <div class="table-scroll">
@@ -600,7 +581,7 @@
   </div>
 </div>
 
-<!-- 什器配置マスタ画面（選択中店舗専用） -->
+<!-- 什器配置マスタ画面 -->
 <div id="layoutMasterView" class="view-container">
   <div class="master-wrapper">
     <div class="master-header">
@@ -629,19 +610,16 @@
   </div>
 </div>
 
-<!-- 印刷用コンテナ -->
 <div id="printSheetContainer"></div>
 
 <script>
 const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
 
-// ① 店舗マスタ
 let STORE_MASTER = [
   { id: "S001", name: "清川二丁目店", area: "福岡中央", memo: "デフォルト店舗", isCurrent: true },
   { id: "S002", name: "博多住吉通り店", area: "博多", memo: "デフォルト店舗", isCurrent: false }
 ];
 
-// ② 商品マスタ（全店共通）
 let ITEMS = [
   { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
   { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
@@ -663,7 +641,6 @@ let ITEMS = [
   { id: 17, name: "ジャンボフランク", category: "ホッターズ", price: 190, limitHour: 6 }
 ];
 
-// デフォルト什器配置テンプレート
 const DEFAULT_FIXTURES = [
   {
     id: "sec_steam", name: "中華まん什器", category: "中華まん", cols: 2, rows: 6,
@@ -695,7 +672,6 @@ const DEFAULT_FIXTURES = [
   }
 ];
 
-// デフォルトスケジュールテンプレート
 const DEFAULT_SCHEDULE = {
   weekday: {
     1: { morning: 8, lunch: 12, evening: 12, minRatio: 0.4 },
@@ -762,7 +738,6 @@ const DEFAULT_TIME_SLOTS = {
   evening: { label: "夕・夜", startHour: 16 }
 };
 
-// 店舗ごとの個別設定保持オブジェクト { "S001": { fixtures, schedule, timeSlots }, "S002": ... }
 let STORES_CONFIG = {
   "S001": {
     fixtures: JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
@@ -781,12 +756,13 @@ let cellBuffers = {};
 let currentScheduleKey = "lunch";
 let currentDayType = "weekday";
 let activeWasteTarget = null;
+let hasUnsavedChanges = false;
+let currentActiveView = "home";
 
 function getCurrentStore() {
   return STORE_MASTER.find(s => s.isCurrent) || STORE_MASTER[0];
 }
 
-// 現在の店舗の設定オブジェクトを取得
 function getActiveStoreConfig() {
   const cur = getCurrentStore();
   if (!STORES_CONFIG[cur.id]) {
@@ -804,74 +780,126 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 初期ロード
-function loadDataFromSpreadsheet() {
-  const indicator = document.getElementById("syncStatus");
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") {
-    if (indicator) indicator.innerText = "⚠️ URL未設定";
-    return;
-  }
-
-  indicator.innerText = "🔄 同期中...";
-  fetch(GAS_ENDPOINT_URL)
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === "success") {
-        if (data.items && data.items.length > 0) {
-          ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(data.items);
-        }
-        if (data.stores && data.stores.length > 0) {
-          STORE_MASTER = data.stores;
-        }
-        if (data.config) {
-          if (data.config.storesConfig) {
-            STORES_CONFIG = data.config.storesConfig;
-          } else if (data.config.fixtures) {
-            // 旧バージョンのバックアップ互換対応
-            const curId = getCurrentStore().id;
-            STORES_CONFIG[curId] = {
-              fixtures: data.config.fixtures,
-              schedule: data.config.schedule || DEFAULT_SCHEDULE,
-              timeSlots: data.config.timeSlots || DEFAULT_TIME_SLOTS
-            };
-          }
-        }
-        if (data.todayRecords) {
-          DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
-        }
-
-        indicator.innerText = "🟢 同期完了";
-        indicator.classList.add("online");
-        applyCurrentStoreData();
-      }
-    })
-    .catch(err => {
-      console.warn("Spreadsheet Load Error:", err);
-      if (indicator) indicator.innerText = "📴 オフライン";
-    });
+// 画面ロック・オーバーレイ制御
+function showLockOverlay(title, desc) {
+  const el = document.getElementById("syncLockOverlay");
+  document.getElementById("syncLockTitle").innerText = title || "処理中...";
+  document.getElementById("syncLockDesc").innerText = desc || "画面を操作せずにお待ちください";
+  el.style.display = "flex";
+}
+function hideLockOverlay() {
+  document.getElementById("syncLockOverlay").style.display = "none";
 }
 
-// 全マスタ・店舗別設定を一括同期
-function syncAllMasterToSpreadsheet() {
+function markUnsaved() {
+  hasUnsavedChanges = true;
+  const btn = document.getElementById("btnGlobalSave");
+  btn.classList.add("has-unsaved");
+  btn.innerText = "⚠️ 保存 (Save)";
+}
+
+function clearUnsaved() {
+  hasUnsavedChanges = false;
+  const btn = document.getElementById("btnGlobalSave");
+  btn.classList.remove("has-unsaved");
+  btn.innerText = "💾 保存 (Save)";
+}
+
+// 起動時1回のみ実行される初期ロード
+async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
+  showLockOverlay("データを読み込み中...", "スプレッドシートから最新設定を取得しています");
+  try {
+    const res = await fetch(GAS_ENDPOINT_URL);
+    const data = await res.json();
+    if (data && data.status === "success") {
+      if (data.items && data.items.length > 0) {
+        ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(data.items);
+      }
+      if (data.stores && data.stores.length > 0) {
+        STORE_MASTER = data.stores;
+      }
+      if (data.config && data.config.storesConfig) {
+        STORES_CONFIG = data.config.storesConfig;
+      }
+      if (data.todayRecords) {
+        DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
+      }
+      applyCurrentStoreData();
+      clearUnsaved();
+    }
+  } catch (err) {
+    console.warn("初期ロード失敗（ローカルデータで動作継続）:", err);
+  } finally {
+    hideLockOverlay();
+  }
+}
+
+// クラウドへのデータ保存（オーバーレイでロック）
+async function syncAllMasterToSpreadsheet(showFeedback = true) {
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+
+  if (showFeedback) showLockOverlay("クラウドに保存中...", "スプレッドシートへ設定を同期しています");
+  
   const fullPayload = {
     items: ITEMS,
     stores: STORE_MASTER,
     storesConfig: STORES_CONFIG
   };
 
-  fetch(GAS_ENDPOINT_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ type: "sync_all_master", payload: fullPayload })
-  }).then(() => {
-    console.log("店舗別設定・商品マスタをスプレッドシートへ同期保存しました。");
-  }).catch(err => console.error("Sync Error:", err));
+  try {
+    await fetch(GAS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ type: "sync_all_master", payload: fullPayload })
+    });
+    clearUnsaved();
+  } catch (err) {
+    console.error("Sync Error:", err);
+  } finally {
+    if (showFeedback) {
+      setTimeout(() => {
+        hideLockOverlay();
+      }, 400);
+    }
+  }
 }
 
-// 店舗切り替え時の画面データ再適用
+async function handleManualSave() {
+  saveCurrentViewInputs();
+  await syncAllMasterToSpreadsheet(true);
+}
+
+// 画面遷移時の自動保存ガード
+async function switchViewWithSave(targetView) {
+  if (currentActiveView === targetView) return;
+
+  // 入力途中のマスタ値があれば反映
+  saveCurrentViewInputs();
+
+  // 未保存がある場合は保存を実行
+  if (hasUnsavedChanges) {
+    showLockOverlay("設定を保存中...", "画面遷移前にクラウドへ保存しています");
+    await syncAllMasterToSpreadsheet(false);
+    hideLockOverlay();
+  }
+
+  currentActiveView = targetView;
+  switchView(targetView);
+}
+
+function saveCurrentViewInputs() {
+  if (currentActiveView === "scheduleMaster") {
+    saveScheduleMaster(false);
+  } else if (currentActiveView === "itemMaster") {
+    saveItemMaster(false);
+  } else if (currentActiveView === "storeMaster") {
+    saveStoreMaster(false);
+  }
+}
+
 function applyCurrentStoreData() {
   const store = getCurrentStore();
   document.getElementById("currentStoreBadge").innerText = `🏪 ${store.name}`;
@@ -921,6 +949,7 @@ function recordArchiveAndSync(itemId, type, qty) {
 
   if (!GAS_ENDPOINT_URL) return;
 
+  // 実績ログは裏で1行非同期送信（操作を止めない）
   fetch(GAS_ENDPOINT_URL, {
     method: "POST",
     mode: "no-cors",
@@ -929,7 +958,6 @@ function recordArchiveAndSync(itemId, type, qty) {
   }).catch(err => console.error("GAS送信エラー:", err));
 }
 
-// 時計＆時間帯判定
 function updateClock() {
   const now = new Date();
   const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
@@ -1270,12 +1298,12 @@ function renderStoreMasterTable() {
   tbody.innerHTML = STORE_MASTER.map((store, idx) => `
     <tr>
       <td style="text-align:center;">
-        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.isCurrent ? 'checked' : ''}>
+        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.isCurrent ? 'checked' : ''} onchange="markUnsaved()">
       </td>
-      <td><input class="ctrl-input" type="text" id="stm-id-${idx}" value="${store.id}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-area-${idx}" value="${store.area}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-memo-${idx}" value="${store.memo}"></td>
+      <td><input class="ctrl-input" type="text" id="stm-id-${idx}" value="${store.id}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-area-${idx}" value="${store.area}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-memo-${idx}" value="${store.memo}" onchange="markUnsaved()"></td>
     </tr>
   `).join("");
 }
@@ -1288,23 +1316,31 @@ function addNewStoreRow() {
     schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
     timeSlots: JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
   };
+  markUnsaved();
   renderStoreMasterTable();
 }
 
-function saveStoreMaster() {
-  const selectedId = document.querySelector('input[name="currentStoreRadio"]:checked').value;
+async function saveStoreMaster(syncNow = true) {
+  const selectedRadio = document.querySelector('input[name="currentStoreRadio"]:checked');
+  const selectedId = selectedRadio ? selectedRadio.value : STORE_MASTER[0].id;
+  
   STORE_MASTER.forEach((store, idx) => {
-    store.id = document.getElementById(`stm-id-${idx}`).value;
-    store.name = document.getElementById(`stm-name-${idx}`).value;
-    store.area = document.getElementById(`stm-area-${idx}`).value;
-    store.memo = document.getElementById(`stm-memo-${idx}`).value;
+    const idEl = document.getElementById(`stm-id-${idx}`);
+    if (idEl) store.id = idEl.value;
+    const nameEl = document.getElementById(`stm-name-${idx}`);
+    if (nameEl) store.name = nameEl.value;
+    const areaEl = document.getElementById(`stm-area-${idx}`);
+    if (areaEl) store.area = areaEl.value;
+    const memoEl = document.getElementById(`stm-memo-${idx}`);
+    if (memoEl) store.memo = memoEl.value;
     store.isCurrent = (store.id === selectedId);
   });
   
   applyCurrentStoreData();
-  syncAllMasterToSpreadsheet();
-  alert(`店舗マスタを保存しました！【運用中: ${getCurrentStore().name}】`);
-  switchView('home');
+  if (syncNow) {
+    await syncAllMasterToSpreadsheet(true);
+    switchView('home');
+  }
 }
 
 function renderItemMasterTable() {
@@ -1312,29 +1348,35 @@ function renderItemMasterTable() {
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => `
     <tr>
       <td>${item.id}</td>
-      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}"></td>
+      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved()"></td>
       <td>
-        <select class="ctrl-select" id="im-cat-${item.id}">
+        <select class="ctrl-select" id="im-cat-${item.id}" onchange="markUnsaved()">
           <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
           <option value="中華まん" ${item.category === '中華まん' ? 'selected' : ''}>中華まん</option>
           <option value="常温総菜" ${item.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
         </select>
       </td>
-      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}"></td>
-      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}"></td>
+      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
     </tr>
   `).join("");
 }
-function saveItemMaster() {
+
+async function saveItemMaster(syncNow = true) {
   ITEMS.forEach(item => {
     if (item.id === 0) return;
-    item.name = document.getElementById(`im-name-${item.id}`).value;
-    item.category = document.getElementById(`im-cat-${item.id}`).value;
-    item.price = parseInt(document.getElementById(`im-price-${item.id}`).value) || 0;
-    item.limitHour = parseFloat(document.getElementById(`im-limitHour-${item.id}`).value) || 0;
+    const nEl = document.getElementById(`im-name-${item.id}`);
+    if (nEl) item.name = nEl.value;
+    const cEl = document.getElementById(`im-cat-${item.id}`);
+    if (cEl) item.category = cEl.value;
+    const pEl = document.getElementById(`im-price-${item.id}`);
+    if (pEl) item.price = parseInt(pEl.value) || 0;
+    const lEl = document.getElementById(`im-limitHour-${item.id}`);
+    if (lEl) item.limitHour = parseFloat(lEl.value) || 0;
   });
-  syncAllMasterToSpreadsheet();
-  alert("全店共通の商品マスタを保存し、スプレッドシート（マスタ_商品）へ同期しました！");
+  if (syncNow) {
+    await syncAllMasterToSpreadsheet(true);
+  }
 }
 
 function renderScheduleMasterTable() {
@@ -1348,38 +1390,48 @@ function renderScheduleMasterTable() {
     return `
       <tr>
         <td><b>${item.name}</b></td><td><span style="color:#94a3b8;">${item.category}</span></td>
-        <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}"></td>
-        <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}"></td>
-        <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}"></td>
-        <td><input class="ctrl-input" type="number" step="0.1" id="sm-ratio-${item.id}" value="${t.minRatio}"></td>
+        <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" step="0.1" id="sm-ratio-${item.id}" value="${t.minRatio}" onchange="markUnsaved()"></td>
       </tr>
     `;
   }).join("");
 }
 
-function saveScheduleMaster() {
+async function saveScheduleMaster(syncNow = true) {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const conf = getActiveStoreConfig();
-  const curStore = getCurrentStore();
 
-  conf.timeSlots.morning.startHour = parseInt(document.getElementById("slot-morning-start").value) || 6;
-  conf.timeSlots.lunch.startHour = parseInt(document.getElementById("slot-lunch-start").value) || 11;
-  conf.timeSlots.evening.startHour = parseInt(document.getElementById("slot-evening-start").value) || 16;
+  const smEl = document.getElementById("slot-morning-start");
+  if (smEl) conf.timeSlots.morning.startHour = parseInt(smEl.value) || 6;
+  const slEl = document.getElementById("slot-lunch-start");
+  if (slEl) conf.timeSlots.lunch.startHour = parseInt(slEl.value) || 11;
+  const seEl = document.getElementById("slot-evening-start");
+  if (seEl) conf.timeSlots.evening.startHour = parseInt(seEl.value) || 16;
 
   if (!conf.schedule[dayType]) conf.schedule[dayType] = {};
 
   ITEMS.forEach(item => {
     if (item.id === 0) return;
-    conf.schedule[dayType][item.id] = {
-      morning: parseInt(document.getElementById(`sm-m-${item.id}`).value) || 0,
-      lunch: parseInt(document.getElementById(`sm-l-${item.id}`).value) || 0,
-      evening: parseInt(document.getElementById(`sm-e-${item.id}`).value) || 0,
-      minRatio: parseFloat(document.getElementById(`sm-ratio-${item.id}`).value) || 0
-    };
+    const mEl = document.getElementById(`sm-m-${item.id}`);
+    const lEl = document.getElementById(`sm-l-${item.id}`);
+    const eEl = document.getElementById(`sm-e-${item.id}`);
+    const rEl = document.getElementById(`sm-ratio-${item.id}`);
+
+    if (mEl && lEl && eEl && rEl) {
+      conf.schedule[dayType][item.id] = {
+        morning: parseInt(mEl.value) || 0,
+        lunch: parseInt(lEl.value) || 0,
+        evening: parseInt(eEl.value) || 0,
+        minRatio: parseFloat(rEl.value) || 0
+      };
+    }
   });
 
-  syncAllMasterToSpreadsheet();
-  alert(`【${curStore.name}】のスケジュール設定（${dayType === 'weekday' ? '平日' : (dayType === 'saturday' ? '土曜' : '日祝')}）を保存しました！`);
+  if (syncNow) {
+    await syncAllMasterToSpreadsheet(true);
+  }
 }
 
 function renderLayoutMasterEditor() {
@@ -1394,7 +1446,7 @@ function renderLayoutMasterEditor() {
     card.style.flex = `${sec.cols} 1 0%`;
     card.innerHTML = `
       <div class="fixture-edit-header">
-        <input class="ctrl-input" style="font-weight:bold; font-size:11px;" type="text" id="sec-name-${sIdx}" value="${sec.name}">
+        <input class="ctrl-input" style="font-weight:bold; font-size:11px;" type="text" id="sec-name-${sIdx}" value="${sec.name}" onchange="markUnsaved()">
         <select class="ctrl-select" style="font-size:10px; width:75px;" id="sec-cat-${sIdx}" onchange="changeSectionCat(${sIdx}, this.value)">
           <option value="中華まん" ${sec.category === '中華まん' ? 'selected' : ''}>中華まん</option>
           <option value="ホッターズ" ${sec.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
@@ -1413,16 +1465,19 @@ function renderLayoutMasterEditor() {
       const optHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
       const cellBox = document.createElement("div");
       cellBox.className = "edit-cell-box";
-      cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}">${optHtml}</select>`;
+      cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved()">${optHtml}</select>`;
       matrixEl.appendChild(cellBox);
     });
   });
 }
+
 function changeSectionCat(sIdx, newCat) {
   const conf = getActiveStoreConfig();
   conf.fixtures[sIdx].category = newCat;
+  markUnsaved();
   renderLayoutMasterEditor();
 }
+
 function resizeFixture(sIdx) {
   const conf = getActiveStoreConfig();
   const newRows = parseInt(document.getElementById(`sec-rows-${sIdx}`).value) || 1;
@@ -1434,26 +1489,28 @@ function resizeFixture(sIdx) {
   conf.fixtures[sIdx].rows = newRows;
   conf.fixtures[sIdx].cols = newCols;
   conf.fixtures[sIdx].cells = updatedCells;
+  markUnsaved();
   renderLayoutMasterEditor();
 }
-function saveLayoutMaster() {
-  const conf = getActiveStoreConfig();
-  const curStore = getCurrentStore();
 
+async function saveLayoutMaster(syncNow = true) {
+  const conf = getActiveStoreConfig();
   conf.fixtures.forEach((sec, sIdx) => {
-    sec.name = document.getElementById(`sec-name-${sIdx}`).value;
-    sec.category = document.getElementById(`sec-cat-${sIdx}`).value;
+    const nEl = document.getElementById(`sec-name-${sIdx}`);
+    if (nEl) sec.name = nEl.value;
+    const cEl = document.getElementById(`sec-cat-${sIdx}`);
+    if (cEl) sec.category = cEl.value;
     sec.cells.forEach((cell, cIdx) => {
       const sel = document.getElementById(`cell-select-${sIdx}-${cIdx}`);
       if (sel) cell.itemId = parseInt(sel.value);
     });
   });
-  syncAllMasterToSpreadsheet();
-  alert(`【${curStore.name}】の什器配置設定を保存しました！`);
-  switchView('home');
+  if (syncNow) {
+    await syncAllMasterToSpreadsheet(true);
+    switchView('home');
+  }
 }
 
-// 紙の什器陳列表（現在選択中店舗のA4 3枚組）印刷
 function printPlanSheets() {
   const container = document.getElementById("printSheetContainer");
   const store = getCurrentStore();
@@ -1471,8 +1528,8 @@ function printPlanSheets() {
 
   dayTypes.forEach(dt => {
     const configMap = conf.schedule[dt.key] || conf.schedule.weekday;
-
     let fixturesHtml = "";
+
     conf.fixtures.forEach(sec => {
       let cellsHtml = "";
       sec.cells.forEach(cell => {
@@ -1557,7 +1614,8 @@ setInterval(updateClock, 1000);
 updateClock();
 applyCurrentStoreData();
 
-loadDataFromSpreadsheet();
+// 起動時1回のみ自動ロード
+loadInitialDataFromSpreadsheet();
 </script>
 </body>
 </html>
