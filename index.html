@@ -836,7 +836,7 @@ function applyFixturesSnapshot(snapData) {
   });
 }
 
-// 起動時1回のみ実行される初期ロード（現在庫スナップショット完全復元）
+// 起動時初期ロード（店舗別設定シート対応）
 async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
@@ -852,8 +852,12 @@ async function loadInitialDataFromSpreadsheet() {
       if (data.stores && data.stores.length > 0) {
         STORE_MASTER = data.stores;
       }
-      if (data.config && data.config.storesConfig) {
-        STORES_CONFIG = data.config.storesConfig;
+      
+      // 店舗別設定（storesConfig）の復元
+      if (data.storesConfig) {
+        Object.keys(data.storesConfig).forEach(sId => {
+          STORES_CONFIG[sId] = data.storesConfig[sId];
+        });
       }
       
       // 現在庫スナップショットの復元
@@ -874,31 +878,33 @@ async function loadInitialDataFromSpreadsheet() {
   }
 }
 
-// クラウドへのデータ保存（什器設定・スケジュール＋現在庫スナップショット）
+// 店舗別設定シート（設定_S001 等）への完全分離保存
 async function syncAllMasterToSpreadsheet(showFeedback = true) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
-  if (showFeedback) showLockOverlay("クラウドに保存中...", "スプレッドシートへ設定と現在庫を同期しています");
-  
   const curStore = getCurrentStore();
-  const fullPayload = {
+  if (showFeedback) showLockOverlay("クラウドに保存中...", `【${curStore.name}】の設定と現在庫を同期しています`);
+  
+  const payloadData = {
     items: ITEMS,
     stores: STORE_MASTER,
-    storesConfig: STORES_CONFIG
+    storeConfig: getActiveStoreConfig() // 操作中の店舗の設定のみを送信
   };
 
   try {
+    // 1. 操作中店舗の設定シートへ保存（設定_S001 / 設定_S002）
     await fetch(GAS_ENDPOINT_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
-        type: "sync_all_master",
-        payload: fullPayload
+        type: "sync_store_config",
+        storeId: curStore.id,
+        payload: payloadData
       })
     });
 
-    // 現在庫スナップショットも保存
+    // 2. 現在庫スナップショットも保存
     await fetch(GAS_ENDPOINT_URL, {
       method: "POST",
       mode: "no-cors",
