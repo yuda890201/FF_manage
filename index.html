@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FF仕込み・在庫管理コンソール</title>
+<title>FF管理アプリ</title>
   <link rel="apple-touch-icon" href="ff_manage.jpg">
   <link rel="icon" type="image/png" href="ff_manage.jpg">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -65,6 +65,13 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  .app-title-tag {
+    font-size: 11px;
+    font-weight: 900;
+    color: #38bdf8;
+    padding-right: 4px;
+    border-right: 1px solid #334155;
   }
   .store-badge {
     background: #0284c7;
@@ -358,7 +365,6 @@
   .fixture-matrix-edit { display: grid; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; padding: 3px; background: #070c18; border-radius: 6px; }
   .edit-cell-box { background: #1e293b; border: 1px dashed #475569; border-radius: 4px; padding: 2px; }
 
-  /* 同期・保存中の全画面ロックオーバーレイ */
   .sync-lock-overlay {
     display: none;
     position: fixed;
@@ -383,16 +389,8 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
-  .sync-lock-text {
-    font-size: 14px;
-    font-weight: 900;
-    color: #f8fafc;
-    letter-spacing: 0.5px;
-  }
-  .sync-lock-subtext {
-    font-size: 11px;
-    color: #94a3b8;
-  }
+  .sync-lock-text { font-size: 14px; font-weight: 900; color: #f8fafc; letter-spacing: 0.5px; }
+  .sync-lock-subtext { font-size: 11px; color: #94a3b8; }
 
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -424,7 +422,6 @@
 </head>
 <body>
 
-<!-- 全画面ロック・同期中オーバーレイ -->
 <div class="sync-lock-overlay" id="syncLockOverlay">
   <div class="sync-spinner"></div>
   <div class="sync-lock-text" id="syncLockTitle">クラウドと同期中...</div>
@@ -433,6 +430,7 @@
 
 <header>
   <div class="header-left">
+    <div class="app-title-tag">FF管理</div>
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
     <button class="btn-global-save" id="btnGlobalSave" onclick="handleManualSave()">💾 保存 (Save)</button>
     <div class="nav-tabs">
@@ -780,7 +778,6 @@ function getTodayDateString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 画面ロック・オーバーレイ制御
 function showLockOverlay(title, desc) {
   const el = document.getElementById("syncLockOverlay");
   document.getElementById("syncLockTitle").innerText = title || "処理中...";
@@ -805,13 +802,48 @@ function clearUnsaved() {
   btn.innerText = "💾 保存 (Save)";
 }
 
-// 起動時1回のみ実行される初期ロード
+// 現在の什器スナップショットを取得
+function getCurrentFixturesSnapshot() {
+  const conf = getActiveStoreConfig();
+  return conf.fixtures.map(sec => ({
+    id: sec.id,
+    cells: sec.cells.map(c => ({
+      itemId: c.itemId,
+      stock: c.stock,
+      cookTime: c.cookTime
+    }))
+  }));
+}
+
+// スナップショットデータを什器に適用
+function applyFixturesSnapshot(snapData) {
+  if (!snapData || !Array.isArray(snapData)) return;
+  const conf = getActiveStoreConfig();
+
+  snapData.forEach(sSec => {
+    const targetSec = conf.fixtures.find(f => f.id === sSec.id);
+    if (targetSec && sSec.cells) {
+      sSec.cells.forEach((sCell, idx) => {
+        if (targetSec.cells[idx]) {
+          targetSec.cells[idx].stock = sCell.stock !== undefined ? sCell.stock : targetSec.cells[idx].stock;
+          targetSec.cells[idx].cookTime = sCell.cookTime !== undefined ? sCell.cookTime : targetSec.cells[idx].cookTime;
+          if (sCell.itemId !== undefined && sCell.itemId !== 0) {
+            targetSec.cells[idx].itemId = sCell.itemId;
+          }
+        }
+      });
+    }
+  });
+}
+
+// 起動時1回のみ実行される初期ロード（現在庫スナップショット完全復元）
 async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
-  showLockOverlay("データを読み込み中...", "スプレッドシートから最新設定を取得しています");
+  const curStore = getCurrentStore();
+  showLockOverlay("データを読み込み中...", "スプレッドシートから最新設定・現在庫を取得しています");
   try {
-    const res = await fetch(GAS_ENDPOINT_URL);
+    const res = await fetch(`${GAS_ENDPOINT_URL}?storeId=${curStore.id}`);
     const data = await res.json();
     if (data && data.status === "success") {
       if (data.items && data.items.length > 0) {
@@ -823,6 +855,12 @@ async function loadInitialDataFromSpreadsheet() {
       if (data.config && data.config.storesConfig) {
         STORES_CONFIG = data.config.storesConfig;
       }
+      
+      // 現在庫スナップショットの復元
+      if (data.snapshots && data.snapshots[curStore.id]) {
+        applyFixturesSnapshot(data.snapshots[curStore.id]);
+      }
+
       if (data.todayRecords) {
         DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
       }
@@ -836,12 +874,13 @@ async function loadInitialDataFromSpreadsheet() {
   }
 }
 
-// クラウドへのデータ保存（オーバーレイでロック）
+// クラウドへのデータ保存（什器設定・スケジュール＋現在庫スナップショット）
 async function syncAllMasterToSpreadsheet(showFeedback = true) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
-  if (showFeedback) showLockOverlay("クラウドに保存中...", "スプレッドシートへ設定を同期しています");
+  if (showFeedback) showLockOverlay("クラウドに保存中...", "スプレッドシートへ設定と現在庫を同期しています");
   
+  const curStore = getCurrentStore();
   const fullPayload = {
     items: ITEMS,
     stores: STORE_MASTER,
@@ -853,8 +892,24 @@ async function syncAllMasterToSpreadsheet(showFeedback = true) {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "sync_all_master", payload: fullPayload })
+      body: JSON.stringify({
+        type: "sync_all_master",
+        payload: fullPayload
+      })
     });
+
+    // 現在庫スナップショットも保存
+    await fetch(GAS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "save_snapshot",
+        storeId: curStore.id,
+        snapshot: getCurrentFixturesSnapshot()
+      })
+    });
+
     clearUnsaved();
   } catch (err) {
     console.error("Sync Error:", err);
@@ -876,10 +931,8 @@ async function handleManualSave() {
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
 
-  // 入力途中のマスタ値があれば反映
   saveCurrentViewInputs();
 
-  // 未保存がある場合は保存を実行
   if (hasUnsavedChanges) {
     showLockOverlay("設定を保存中...", "画面遷移前にクラウドへ保存しています");
     await syncAllMasterToSpreadsheet(false);
@@ -915,6 +968,7 @@ function applyCurrentStoreData() {
   renderRecordTable();
 }
 
+// 実績ログ送信 ＋ 現在庫スナップショットの自動送信（10秒タイマー確定時）
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -949,12 +1003,16 @@ function recordArchiveAndSync(itemId, type, qty) {
 
   if (!GAS_ENDPOINT_URL) return;
 
-  // 実績ログは裏で1行非同期送信（操作を止めない）
+  // 実績1行追記 ＋ 最新スナップショットを同時に非同期送信
   fetch(GAS_ENDPOINT_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ type: "record_log", payload: payloadData })
+    body: JSON.stringify({
+      type: "record_log",
+      payload: payloadData,
+      snapshot: getCurrentFixturesSnapshot()
+    })
   }).catch(err => console.error("GAS送信エラー:", err));
 }
 
@@ -1614,7 +1672,7 @@ setInterval(updateClock, 1000);
 updateClock();
 applyCurrentStoreData();
 
-// 起動時1回のみ自動ロード
+// 起動時に最新設定および現在庫スナップショットを取得
 loadInitialDataFromSpreadsheet();
 </script>
 </body>
