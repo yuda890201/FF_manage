@@ -841,6 +841,8 @@ function getCurrentFixturesSnapshot() {
   }));
 }
 
+// 【修正版】スナップショットは「在庫数」と「調理時刻」のみを復元し、
+// 商品の配置（itemId）や什器の形は設定シート側の正しいデータを死守する
 function applyFixturesSnapshot(snapData) {
   if (!snapData || !Array.isArray(snapData)) return;
   const conf = getActiveStoreConfig();
@@ -850,11 +852,11 @@ function applyFixturesSnapshot(snapData) {
     if (targetSec && sSec.cells) {
       sSec.cells.forEach((sCell, idx) => {
         if (targetSec.cells[idx]) {
+          // 在庫数と調理時刻のみスナップショットから復元
           targetSec.cells[idx].stock = sCell.stock !== undefined ? sCell.stock : targetSec.cells[idx].stock;
           targetSec.cells[idx].cookTime = sCell.cookTime !== undefined ? sCell.cookTime : targetSec.cells[idx].cookTime;
-          if (sCell.itemId !== undefined && sCell.itemId !== 0) {
-            targetSec.cells[idx].itemId = sCell.itemId;
-          }
+          
+          // ※ sCell.itemId の上書き処理をあえて削除（配置は設定シートを絶対正とする）
         }
       });
     }
