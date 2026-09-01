@@ -89,7 +89,7 @@
     box-shadow: 0 2px 0 #064e3b;
     color: #fff;
     border: none;
-    padding: 4px 10px;
+    padding: 4px 9px;
     border-radius: 6px;
     font-size: 11px;
     font-weight: 900;
@@ -109,6 +109,20 @@
     0% { transform: scale(1); }
     100% { transform: scale(1.05); }
   }
+
+  .btn-global-reload {
+    background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+    box-shadow: 0 2px 0 #020617;
+    color: #cbd5e1;
+    border: 1px solid #475569;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-global-reload:active { transform: translateY(2px); box-shadow: none; }
 
   .nav-tabs {
     display: flex;
@@ -433,6 +447,7 @@
     <div class="app-title-tag">FF管理</div>
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
     <button class="btn-global-save" id="btnGlobalSave" onclick="handleManualSave()">💾 保存 (Save)</button>
+    <button class="btn-global-reload" onclick="handleManualReload()">🔄 再読込</button>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
       <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
@@ -802,7 +817,6 @@ function clearUnsaved() {
   btn.innerText = "💾 保存 (Save)";
 }
 
-// 現在の什器スナップショットを取得
 function getCurrentFixturesSnapshot() {
   const conf = getActiveStoreConfig();
   return conf.fixtures.map(sec => ({
@@ -815,7 +829,6 @@ function getCurrentFixturesSnapshot() {
   }));
 }
 
-// スナップショットデータを什器に適用
 function applyFixturesSnapshot(snapData) {
   if (!snapData || !Array.isArray(snapData)) return;
   const conf = getActiveStoreConfig();
@@ -836,7 +849,7 @@ function applyFixturesSnapshot(snapData) {
   });
 }
 
-// 起動時初期ロード（店舗別設定シート対応）
+// 起動時および手動再読込時の読み込み処理
 async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
@@ -853,14 +866,12 @@ async function loadInitialDataFromSpreadsheet() {
         STORE_MASTER = data.stores;
       }
       
-      // 店舗別設定（storesConfig）の復元
-      if (data.storesConfig) {
-        Object.keys(data.storesConfig).forEach(sId => {
-          STORES_CONFIG[sId] = data.storesConfig[sId];
-        });
+      // 店舗別設定の完全上書き適用（混在防止）
+      if (data.storesConfig && Object.keys(data.storesConfig).length > 0) {
+        STORES_CONFIG = data.storesConfig;
       }
       
-      // 現在庫スナップショットの復元
+      // 現在庫スナップショットの適用
       if (data.snapshots && data.snapshots[curStore.id]) {
         applyFixturesSnapshot(data.snapshots[curStore.id]);
       }
@@ -872,13 +883,23 @@ async function loadInitialDataFromSpreadsheet() {
       clearUnsaved();
     }
   } catch (err) {
-    console.warn("初期ロード失敗（ローカルデータで動作継続）:", err);
+    console.warn("データ読込失敗（ローカルデータで動作継続）:", err);
   } finally {
     hideLockOverlay();
   }
 }
 
-// 店舗別設定シート（設定_S001 等）への完全分離保存
+// 手動再読込ボタン（Reload）
+async function handleManualReload() {
+  if (hasUnsavedChanges) {
+    if (!confirm("未保存の変更があります。破棄してクラウドから最新データを再読み込みしますか？")) {
+      return;
+    }
+  }
+  await loadInitialDataFromSpreadsheet();
+  alert("スプレッドシートから最新データを再読み込みしました！");
+}
+
 async function syncAllMasterToSpreadsheet(showFeedback = true) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
@@ -888,11 +909,10 @@ async function syncAllMasterToSpreadsheet(showFeedback = true) {
   const payloadData = {
     items: ITEMS,
     stores: STORE_MASTER,
-    storeConfig: getActiveStoreConfig() // 操作中の店舗の設定のみを送信
+    storeConfig: getActiveStoreConfig()
   };
 
   try {
-    // 1. 操作中店舗の設定シートへ保存（設定_S001 / 設定_S002）
     await fetch(GAS_ENDPOINT_URL, {
       method: "POST",
       mode: "no-cors",
@@ -904,7 +924,6 @@ async function syncAllMasterToSpreadsheet(showFeedback = true) {
       })
     });
 
-    // 2. 現在庫スナップショットも保存
     await fetch(GAS_ENDPOINT_URL, {
       method: "POST",
       mode: "no-cors",
@@ -933,7 +952,6 @@ async function handleManualSave() {
   await syncAllMasterToSpreadsheet(true);
 }
 
-// 画面遷移時の自動保存ガード
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
 
@@ -974,7 +992,6 @@ function applyCurrentStoreData() {
   renderRecordTable();
 }
 
-// 実績ログ送信 ＋ 現在庫スナップショットの自動送信（10秒タイマー確定時）
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -1009,7 +1026,6 @@ function recordArchiveAndSync(itemId, type, qty) {
 
   if (!GAS_ENDPOINT_URL) return;
 
-  // 実績1行追記 ＋ 最新スナップショットを同時に非同期送信
   fetch(GAS_ENDPOINT_URL, {
     method: "POST",
     mode: "no-cors",
