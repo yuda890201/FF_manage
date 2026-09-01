@@ -559,13 +559,13 @@
     </div>
     <div style="display:flex; gap:8px; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00">〜
+        <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>昼:</span><input class="ctrl-input" style="width:50px;" id="slot-lunch-start" value="11:00">〜
+        <span>昼:</span><input class="ctrl-input" style="width:50px;" id="slot-lunch-start" value="11:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00">〜
+        <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00" onchange="markUnsaved()">〜
       </div>
     </div>
     <div class="table-scroll">
@@ -758,6 +758,7 @@ let cellBuffers = {};
 let currentScheduleKey = "lunch";
 let currentDayType = "weekday";
 let activeWasteTarget = null;
+let hasUnsavedChanges = false; // 未保存フラグ
 let currentActiveView = "home";
 
 function getCurrentStore() {
@@ -791,7 +792,15 @@ function hideLockOverlay() {
   document.getElementById("syncLockOverlay").style.display = "none";
 }
 
-// 起動時自動ロード（スナップショットから設定＋現在庫を完全に丸ごと復元）
+function markUnsaved() {
+  hasUnsavedChanges = true;
+}
+
+function clearUnsaved() {
+  hasUnsavedChanges = false;
+}
+
+// 起動時自動ロード
 async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
@@ -810,7 +819,6 @@ async function loadInitialDataFromSpreadsheet() {
       if (data.storesConfig && Object.keys(data.storesConfig).length > 0) {
         STORES_CONFIG = data.storesConfig;
       }
-      // スナップショット（店舗全体の最新状態：設定＋現在庫）を丸ごと復元
       if (data.snapshots && data.snapshots[curStore.id]) {
         const snap = data.snapshots[curStore.id];
         if (snap.fixtures) getActiveStoreConfig().fixtures = snap.fixtures;
@@ -821,6 +829,7 @@ async function loadInitialDataFromSpreadsheet() {
         DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
       }
       applyCurrentStoreData();
+      clearUnsaved();
     }
   } catch (err) {
     console.warn("データ読込失敗:", err);
@@ -829,7 +838,7 @@ async function loadInitialDataFromSpreadsheet() {
   }
 }
 
-// 📦 手動バックアップ作成ボタン（壊れた時の保険用）
+// 📦 手動バックアップ作成
 async function handleManualBackup() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
   const curStore = getCurrentStore();
@@ -858,7 +867,7 @@ async function handleManualBackup() {
   }
 }
 
-// 🔄 バックアップ復元ボタン（保険からの復旧用）
+// 🔄 バックアップ復元
 async function handleManualRestore() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
   const curStore = getCurrentStore();
@@ -880,6 +889,7 @@ async function handleManualRestore() {
         STORES_CONFIG[curStore.id] = bck.storesConfig[curStore.id];
       }
       applyCurrentStoreData();
+      clearUnsaved();
       alert(`【${curStore.name}】の復元が完了しました！`);
     } else {
       alert("この店舗の手動バックアップデータが見つかりませんでした。");
@@ -892,7 +902,7 @@ async function handleManualRestore() {
   }
 }
 
-// 設定変更後の保存処理（設定画面の保存ボタン or タブ切り替え時に実行）
+// クラウドへの設定保存（明示的な「保存」ボタン押下時、または変更ありでの画面遷移時のみ実行）
 async function saveStoreConfigToCloud(showFeedback = true) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
   const curStore = getCurrentStore();
@@ -910,8 +920,8 @@ async function saveStoreConfigToCloud(showFeedback = true) {
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({ type: "sync_store_config", storeId: curStore.id, payload: payloadData })
     });
-    // 現在庫・配置を含めた店舗全体の最新状態をスナップショットとしても同期
     await saveSnapshotToCloud(false);
+    clearUnsaved();
   } catch (err) {
     console.error("Sync Error:", err);
   } finally {
@@ -919,11 +929,10 @@ async function saveStoreConfigToCloud(showFeedback = true) {
   }
 }
 
-// 現在庫（個数・タイマー・配置すべて）をスナップショットとして自動保存
 async function saveSnapshotToCloud(showFeedback = false) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
   const curStore = getCurrentStore();
-  const fullSnapshot = getActiveStoreConfig(); // 店舗全体のデータ（設定＋現在庫）を丸ごと保存
+  const fullSnapshot = getActiveStoreConfig();
 
   try {
     await fetch(GAS_ENDPOINT_URL, {
@@ -936,11 +945,18 @@ async function saveSnapshotToCloud(showFeedback = false) {
   }
 }
 
+// 【最適化】変更がある時だけ自動保存する画面遷移
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
   saveCurrentViewInputs();
-  // 画面遷移時に設定を自動保存
-  await saveStoreConfigToCloud(false);
+
+  // ★設定に変更がある場合のみクラウド保存（変更がなければ通信ゼロで一瞬で切り替え）
+  if (hasUnsavedChanges) {
+    showLockOverlay("設定を保存中...", "変更された設定をクラウドへ保存しています");
+    await saveStoreConfigToCloud(false);
+    hideLockOverlay();
+  }
+
   currentActiveView = targetView;
   switchView(targetView);
 }
@@ -966,7 +982,6 @@ function applyCurrentStoreData() {
   renderRecordTable();
 }
 
-// 実績ログ送信 ＋ 現在庫増減時のスナップショット自動保存（10秒タイマー確定時）
 function recordArchiveAndSync(itemId, type, qty) {
   if (itemId === 0 || qty <= 0) return;
   const dateKey = getTodayDateString();
@@ -991,7 +1006,6 @@ function recordArchiveAndSync(itemId, type, qty) {
   };
 
   if (!GAS_ENDPOINT_URL) return;
-  // 実績1行追記 ＋ 店舗全体スナップショットを同時に保存
   fetch(GAS_ENDPOINT_URL, {
     method: "POST", mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
@@ -1335,12 +1349,12 @@ function renderStoreMasterTable() {
   tbody.innerHTML = STORE_MASTER.map((store, idx) => `
     <tr>
       <td style="text-align:center;">
-        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.isCurrent ? 'checked' : ''}>
+        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.isCurrent ? 'checked' : ''} onchange="markUnsaved()">
       </td>
-      <td><input class="ctrl-input" type="text" id="stm-id-${idx}" value="${store.id}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-area-${idx}" value="${store.area}"></td>
-      <td><input class="ctrl-input" type="text" id="stm-memo-${idx}" value="${store.memo}"></td>
+      <td><input class="ctrl-input" type="text" id="stm-id-${idx}" value="${store.id}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-area-${idx}" value="${store.area}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="text" id="stm-memo-${idx}" value="${store.memo}" onchange="markUnsaved()"></td>
     </tr>
   `).join("");
 }
@@ -1353,6 +1367,7 @@ function addNewStoreRow() {
     schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
     timeSlots: JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
   };
+  markUnsaved();
   renderStoreMasterTable();
 }
 
@@ -1382,16 +1397,16 @@ function renderItemMasterTable() {
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => `
     <tr>
       <td>${item.id}</td>
-      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}"></td>
+      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved()"></td>
       <td>
-        <select class="ctrl-select" id="im-cat-${item.id}">
+        <select class="ctrl-select" id="im-cat-${item.id}" onchange="markUnsaved()">
           <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
           <option value="中華まん" ${item.category === '中華まん' ? 'selected' : ''}>中華まん</option>
           <option value="常温総菜" ${item.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
         </select>
       </td>
-      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}"></td>
-      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}"></td>
+      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
     </tr>
   `).join("");
 }
@@ -1422,10 +1437,10 @@ function renderScheduleMasterTable() {
     return `
       <tr>
         <td><b>${item.name}</b></td><td><span style="color:#94a3b8;">${item.category}</span></td>
-        <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}"></td>
-        <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}"></td>
-        <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}"></td>
-        <td><input class="ctrl-input" type="number" step="0.1" id="sm-ratio-${item.id}" value="${t.minRatio}"></td>
+        <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input" type="number" step="0.1" id="sm-ratio-${item.id}" value="${t.minRatio}" onchange="markUnsaved()"></td>
       </tr>
     `;
   }).join("");
@@ -1476,7 +1491,7 @@ function renderLayoutMasterEditor() {
     card.style.flex = `${sec.cols} 1 0%`;
     card.innerHTML = `
       <div class="fixture-edit-header">
-        <input class="ctrl-input" style="font-weight:bold; font-size:11px;" type="text" id="sec-name-${sIdx}" value="${sec.name}">
+        <input class="ctrl-input" style="font-weight:bold; font-size:11px;" type="text" id="sec-name-${sIdx}" value="${sec.name}" onchange="markUnsaved()">
         <select class="ctrl-select" style="font-size:10px; width:75px;" id="sec-cat-${sIdx}" onchange="changeSectionCat(${sIdx}, this.value)">
           <option value="中華まん" ${sec.category === '中華まん' ? 'selected' : ''}>中華まん</option>
           <option value="ホッターズ" ${sec.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
@@ -1495,7 +1510,7 @@ function renderLayoutMasterEditor() {
       const optHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
       const cellBox = document.createElement("div");
       cellBox.className = "edit-cell-box";
-      cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}">${optHtml}</select>`;
+      cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved()">${optHtml}</select>`;
       matrixEl.appendChild(cellBox);
     });
   });
@@ -1504,6 +1519,7 @@ function renderLayoutMasterEditor() {
 function changeSectionCat(sIdx, newCat) {
   const conf = getActiveStoreConfig();
   conf.fixtures[sIdx].category = newCat;
+  markUnsaved();
   renderLayoutMasterEditor();
 }
 
@@ -1518,6 +1534,7 @@ function resizeFixture(sIdx) {
   conf.fixtures[sIdx].rows = newRows;
   conf.fixtures[sIdx].cols = newCols;
   conf.fixtures[sIdx].cells = updatedCells;
+  markUnsaved();
   renderLayoutMasterEditor();
 }
 
