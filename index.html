@@ -64,7 +64,7 @@
   .header-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
   }
   .app-title-tag {
     font-size: 11px;
@@ -89,14 +89,11 @@
     box-shadow: 0 2px 0 #064e3b;
     color: #fff;
     border: none;
-    padding: 4px 9px;
+    padding: 4px 8px;
     border-radius: 6px;
     font-size: 11px;
     font-weight: 900;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 3px;
     transition: all 0.15s ease;
   }
   .btn-global-save:active { transform: translateY(2px); box-shadow: none; }
@@ -110,7 +107,21 @@
     100% { transform: scale(1.05); }
   }
 
-  .btn-global-reload {
+  .btn-global-backup {
+    background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+    box-shadow: 0 2px 0 #5b21b6;
+    color: #fff;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-global-backup:active { transform: translateY(2px); box-shadow: none; }
+
+  .btn-global-restore {
     background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
     box-shadow: 0 2px 0 #020617;
     color: #cbd5e1;
@@ -122,7 +133,7 @@
     cursor: pointer;
     transition: all 0.15s ease;
   }
-  .btn-global-reload:active { transform: translateY(2px); box-shadow: none; }
+  .btn-global-restore:active { transform: translateY(2px); box-shadow: none; }
 
   .nav-tabs {
     display: flex;
@@ -446,8 +457,9 @@
   <div class="header-left">
     <div class="app-title-tag">FF管理</div>
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
-    <button class="btn-global-save" id="btnGlobalSave" onclick="handleManualSave()">💾 保存 (Save)</button>
-    <button class="btn-global-reload" onclick="handleManualReload()">🔄 再読込</button>
+    <button class="btn-global-save" id="btnGlobalSave" onclick="handleManualSave()">💾 保存</button>
+    <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成</button>
+    <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元</button>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
       <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
@@ -807,14 +819,14 @@ function markUnsaved() {
   hasUnsavedChanges = true;
   const btn = document.getElementById("btnGlobalSave");
   btn.classList.add("has-unsaved");
-  btn.innerText = "⚠️ 保存 (Save)";
+  btn.innerText = "⚠️ 保存";
 }
 
 function clearUnsaved() {
   hasUnsavedChanges = false;
   const btn = document.getElementById("btnGlobalSave");
   btn.classList.remove("has-unsaved");
-  btn.innerText = "💾 保存 (Save)";
+  btn.innerText = "💾 保存";
 }
 
 function getCurrentFixturesSnapshot() {
@@ -849,12 +861,12 @@ function applyFixturesSnapshot(snapData) {
   });
 }
 
-// 起動時および手動再読込時の読み込み処理
+// 起動時自動ロード
 async function loadInitialDataFromSpreadsheet() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
 
   const curStore = getCurrentStore();
-  showLockOverlay("データを読み込み中...", "スプレッドシートから最新設定・現在庫を取得しています");
+  showLockOverlay("データを読み込み中...", "スプレッドシートから最新設定を取得しています");
   try {
     const res = await fetch(`${GAS_ENDPOINT_URL}?storeId=${curStore.id}`);
     const data = await res.json();
@@ -865,17 +877,12 @@ async function loadInitialDataFromSpreadsheet() {
       if (data.stores && data.stores.length > 0) {
         STORE_MASTER = data.stores;
       }
-      
-      // 店舗別設定の完全上書き適用（混在防止）
       if (data.storesConfig && Object.keys(data.storesConfig).length > 0) {
         STORES_CONFIG = data.storesConfig;
       }
-      
-      // 現在庫スナップショットの適用
       if (data.snapshots && data.snapshots[curStore.id]) {
         applyFixturesSnapshot(data.snapshots[curStore.id]);
       }
-
       if (data.todayRecords) {
         DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
       }
@@ -883,28 +890,85 @@ async function loadInitialDataFromSpreadsheet() {
       clearUnsaved();
     }
   } catch (err) {
-    console.warn("データ読込失敗（ローカルデータで動作継続）:", err);
+    console.warn("データ読込失敗:", err);
   } finally {
     hideLockOverlay();
   }
 }
 
-// 手動再読込ボタン（Reload）
-async function handleManualReload() {
-  if (hasUnsavedChanges) {
-    if (!confirm("未保存の変更があります。破棄してクラウドから最新データを再読み込みしますか？")) {
-      return;
-    }
+// 📦 手動バックアップ作成ボタンの処理
+async function handleManualBackup() {
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  const curStore = getCurrentStore();
+  saveCurrentViewInputs();
+
+  showLockOverlay("バックアップ作成中...", `【${curStore.name}】の安全なバックアップを作成しています`);
+  try {
+    const payloadData = {
+      items: ITEMS,
+      stores: STORE_MASTER,
+      storeConfig: getActiveStoreConfig()
+    };
+
+    await fetch(GAS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "save_manual_backup",
+        storeId: curStore.id,
+        payload: payloadData
+      })
+    });
+
+    alert(`【${curStore.name}】の手動バックアップを正常に作成しました！\n（データが崩れた際はこのバックアップから復元できます）`);
+  } catch (err) {
+    console.error("Backup Error:", err);
+    alert("バックアップの作成に失敗しました。");
+  } finally {
+    hideLockOverlay();
   }
-  await loadInitialDataFromSpreadsheet();
-  alert("スプレッドシートから最新データを再読み込みしました！");
+}
+
+// 🔄 バックアップから復元ボタンの処理
+async function handleManualRestore() {
+  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  const curStore = getCurrentStore();
+
+  if (!confirm(`【${curStore.name}】を手動バックアップの状態に復元しますか？\n（現在の変更内容がバックアップ時点の状態に戻ります）`)) {
+    return;
+  }
+
+  showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
+  try {
+    const res = await fetch(`${GAS_ENDPOINT_URL}?storeId=${curStore.id}`);
+    const data = await res.json();
+    if (data && data.manualBackup) {
+      const bck = data.manualBackup;
+      if (bck.items && bck.items.length > 0) {
+        ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
+      }
+      if (bck.storeConfig) {
+        STORES_CONFIG[curStore.id] = bck.storeConfig;
+      }
+      applyCurrentStoreData();
+      clearUnsaved();
+      alert(`【${curStore.name}】の復元が完了しました！`);
+    } else {
+      alert("この店舗の手動バックアップデータが見つかりませんでした。\nまずは「バックアップ作成」を行ってください。");
+    }
+  } catch (err) {
+    console.error("Restore Error:", err);
+    alert("復元に失敗しました。");
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 async function syncAllMasterToSpreadsheet(showFeedback = true) {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
-
   const curStore = getCurrentStore();
-  if (showFeedback) showLockOverlay("クラウドに保存中...", `【${curStore.name}】の設定と現在庫を同期しています`);
+  if (showFeedback) showLockOverlay("クラウドに保存中...", `【${curStore.name}】の設定を同期しています`);
   
   const payloadData = {
     items: ITEMS,
@@ -917,33 +981,19 @@ async function syncAllMasterToSpreadsheet(showFeedback = true) {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        type: "sync_store_config",
-        storeId: curStore.id,
-        payload: payloadData
-      })
+      body: JSON.stringify({ type: "sync_store_config", storeId: curStore.id, payload: payloadData })
     });
-
     await fetch(GAS_ENDPOINT_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        type: "save_snapshot",
-        storeId: curStore.id,
-        snapshot: getCurrentFixturesSnapshot()
-      })
+      body: JSON.stringify({ type: "save_snapshot", storeId: curStore.id, snapshot: getCurrentFixturesSnapshot() })
     });
-
     clearUnsaved();
   } catch (err) {
     console.error("Sync Error:", err);
   } finally {
-    if (showFeedback) {
-      setTimeout(() => {
-        hideLockOverlay();
-      }, 400);
-    }
+    if (showFeedback) { setTimeout(() => { hideLockOverlay(); }, 400); }
   }
 }
 
@@ -954,27 +1004,20 @@ async function handleManualSave() {
 
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
-
   saveCurrentViewInputs();
-
   if (hasUnsavedChanges) {
     showLockOverlay("設定を保存中...", "画面遷移前にクラウドへ保存しています");
     await syncAllMasterToSpreadsheet(false);
     hideLockOverlay();
   }
-
   currentActiveView = targetView;
   switchView(targetView);
 }
 
 function saveCurrentViewInputs() {
-  if (currentActiveView === "scheduleMaster") {
-    saveScheduleMaster(false);
-  } else if (currentActiveView === "itemMaster") {
-    saveItemMaster(false);
-  } else if (currentActiveView === "storeMaster") {
-    saveStoreMaster(false);
-  }
+  if (currentActiveView === "scheduleMaster") saveScheduleMaster(false);
+  else if (currentActiveView === "itemMaster") saveItemMaster(false);
+  else if (currentActiveView === "storeMaster") saveStoreMaster(false);
 }
 
 function applyCurrentStoreData() {
@@ -1008,33 +1051,18 @@ function recordArchiveAndSync(itemId, type, qty) {
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   
   const payloadData = {
-    timestamp: now.toISOString(),
-    date: dateKey,
-    time: timeStr,
-    storeId: curStore.id,
-    storeName: curStore.name,
-    timeSlot: currentScheduleKey,
-    itemId: itemId,
-    itemName: item.name,
-    category: item.category,
-    price: item.price,
-    action: type === 'cook' ? '調理' : (type === 'sell' ? '販売' : '廃棄'),
-    qty: qty,
-    salesAmount: type === 'sell' ? item.price * qty : 0,
-    wasteAmount: type === 'waste' ? item.price * qty : 0
+    timestamp: now.toISOString(), date: dateKey, time: timeStr,
+    storeId: curStore.id, storeName: curStore.name, timeSlot: currentScheduleKey,
+    itemId: itemId, itemName: item.name, category: item.category, price: item.price,
+    action: type === 'cook' ? '調理' : (type === 'sell' ? '販売' : '廃棄'), qty: qty,
+    salesAmount: type === 'sell' ? item.price * qty : 0, wasteAmount: type === 'waste' ? item.price * qty : 0
   };
 
   if (!GAS_ENDPOINT_URL) return;
-
   fetch(GAS_ENDPOINT_URL, {
-    method: "POST",
-    mode: "no-cors",
+    method: "POST", mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({
-      type: "record_log",
-      payload: payloadData,
-      snapshot: getCurrentFixturesSnapshot()
-    })
+    body: JSON.stringify({ type: "record_log", payload: payloadData, snapshot: getCurrentFixturesSnapshot() })
   }).catch(err => console.error("GAS送信エラー:", err));
 }
 
@@ -1058,11 +1086,8 @@ function updateClock() {
 
   let newKey = "evening";
   let label = "夕・夜";
-  if (h >= conf.timeSlots.morning.startHour && h < conf.timeSlots.lunch.startHour) {
-    newKey = "morning"; label = "朝";
-  } else if (h >= conf.timeSlots.lunch.startHour && h < conf.timeSlots.evening.startHour) {
-    newKey = "lunch"; label = "昼";
-  }
+  if (h >= conf.timeSlots.morning.startHour && h < conf.timeSlots.lunch.startHour) { newKey = "morning"; label = "朝"; }
+  else if (h >= conf.timeSlots.lunch.startHour && h < conf.timeSlots.evening.startHour) { newKey = "lunch"; label = "昼"; }
 
   const sBadge = document.getElementById("scheduleBadge");
   if (sBadge.innerText !== `${label} (${conf.timeSlots[newKey].startHour}:00〜)`) {
@@ -1073,7 +1098,6 @@ function updateClock() {
     currentScheduleKey = newKey;
     renderHomeFixtures();
   }
-
   updateWasteAlertBar();
 }
 
@@ -1692,9 +1716,6 @@ function printPlanSheets() {
 window.addEventListener('resize', autoFitTitles);
 setInterval(updateClock, 1000);
 updateClock();
-applyCurrentStoreData();
-
-// 起動時に最新設定および現在庫スナップショットを取得
 loadInitialDataFromSpreadsheet();
 </script>
 </body>
