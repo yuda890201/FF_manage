@@ -930,7 +930,7 @@ async function handleManualBackup() {
   }
 }
 
-// 🔄 バックアップから復元ボタンの処理
+// 🔄 バックアップ復元ボタンの処理（どちらの構造のJSONでも読み込めるように対応）
 async function handleManualRestore() {
   if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
   const curStore = getCurrentStore();
@@ -945,12 +945,24 @@ async function handleManualRestore() {
     const data = await res.json();
     if (data && data.manualBackup) {
       const bck = data.manualBackup;
+      
+      // 商品マスタの復元
       if (bck.items && bck.items.length > 0) {
         ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
       }
+      
+      // 店舗マスタの復元
+      if (bck.stores && bck.stores.length > 0) {
+        STORE_MASTER = bck.stores;
+      }
+
+      // どっちの構造（storeConfig / storesConfig）で保存されていても対応して復元
       if (bck.storeConfig) {
         STORES_CONFIG[curStore.id] = bck.storeConfig;
+      } else if (bck.storesConfig && bck.storesConfig[curStore.id]) {
+        STORES_CONFIG[curStore.id] = bck.storesConfig[curStore.id];
       }
+
       applyCurrentStoreData();
       clearUnsaved();
       alert(`【${curStore.name}】の復元が完了しました！`);
