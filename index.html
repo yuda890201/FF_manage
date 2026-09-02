@@ -1615,7 +1615,8 @@ function renderLayoutMasterEditor() {
     container.appendChild(card);
     const matrixEl = card.querySelector(`#sec-matrix-${sIdx}`);
     sec.cells.forEach((cell, cIdx) => {
-      const optHtml = ITEMS.map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
+      const optHtml = ITEMS.filter(i => i.id === 0 || i.category === sec.category)
+        .map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
       const cellBox = document.createElement("div");
       cellBox.className = "edit-cell-box";
       cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved()">${optHtml}</select>`;
