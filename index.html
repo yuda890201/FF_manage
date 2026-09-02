@@ -477,8 +477,8 @@
     <div class="header-left">
       <div class="app-title-tag">FF管理</div>
       <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
-      <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成</button>
-      <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元</button>
+      <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成（全店舗）</button>
+      <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元（この店舗）</button>
       <button class="btn-global-restore" onclick="signOutUser()">ログアウト</button>
     </div>
     <div class="header-right">
@@ -821,23 +821,32 @@ async function loadInitialDataFromSpreadsheet() {
   }
 }
 
-// 📦 手動バックアップ作成
+// 📦 手動バックアップ作成（全店舗分）
 async function handleManualBackup() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
   saveCurrentViewInputs();
 
-  showLockOverlay("バックアップ作成中...", `【${curStore.name}】の安全なバックアップを作成しています`);
+  showLockOverlay("バックアップ作成中...", "全店舗の安全なバックアップを作成しています");
   try {
-    const payloadData = {
-      items: ITEMS,
-      stores: STORE_MASTER,
-      storeConfig: getActiveStoreConfig()
-    };
+    const backedUpAt = Date.now();
+    for (const store of STORE_MASTER) {
+      const storeConfig = store.id === curStore.id
+        ? getActiveStoreConfig()
+        : (await db.collection('storesConfig').doc(store.id).get()).data() || null;
 
-    await db.collection('manualBackups').doc(curStore.id).set(payloadData);
+      if (!storeConfig) continue;
 
-    alert(`【${curStore.name}】の手動バックアップを正常に作成しました！`);
+      const payloadData = {
+        items: ITEMS,
+        stores: STORE_MASTER,
+        storeConfig,
+        backedUpAt
+      };
+      await db.collection('manualBackups').doc(store.id).set(payloadData);
+    }
+
+    alert(`全店舗（${STORE_MASTER.length}件）の手動バックアップを正常に作成しました！`);
   } catch (err) {
     console.error("Backup Error:", err);
     alert("バックアップの作成に失敗しました。");
