@@ -570,7 +570,11 @@
   <div class="master-wrapper">
     <div class="master-header">
       <div class="master-title">📦 商品マスタ（全店共通）</div>
-      <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewItemRow()">＋ 商品追加</button>
+        <button class="btn-save-action" style="background:#f59e0b;" onclick="mergeDuplicateItems()">🧹 重複を統合</button>
+        <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
+      </div>
     </div>
     <div class="table-scroll">
       <table class="master-table">
@@ -1352,12 +1356,25 @@ async function saveStoreMaster() {
   switchView('home');
 }
 
+function findDuplicateItemNames() {
+  const nameCount = {};
+  ITEMS.filter(i => i.id !== 0).forEach(i => {
+    const key = (i.name || "").trim();
+    if (!key) return;
+    nameCount[key] = (nameCount[key] || 0) + 1;
+  });
+  return Object.keys(nameCount).filter(name => nameCount[name] > 1);
+}
+
 function renderItemMasterTable() {
   const tbody = document.getElementById("itemMasterBody");
-  tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => `
-    <tr>
-      <td>${item.id}</td>
-      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved()"></td>
+  const dupNames = new Set(findDuplicateItemNames());
+  tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => {
+    const isDup = dupNames.has((item.name || "").trim());
+    return `
+    <tr ${isDup ? 'style="background:#fef3c7;"' : ''}>
+      <td>${item.id}${isDup ? ' <span style="color:#d97706; font-size:10px;" title="商品名が重複しています">⚠重複</span>' : ''}</td>
+      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved(); renderItemMasterTable();"></td>
       <td>
         <select class="ctrl-select" id="im-cat-${item.id}" onchange="markUnsaved()">
           <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
@@ -1368,14 +1385,22 @@ function renderItemMasterTable() {
       <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
       <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
+}
+
+function addNewItemRow() {
+  const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
+  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0 });
+  markUnsaved();
+  renderItemMasterTable();
 }
 
 async function saveItemMaster() {
   ITEMS.forEach(item => {
     if (item.id === 0) return;
     const nEl = document.getElementById(`im-name-${item.id}`);
-    if (nEl) item.name = nEl.value;
+    if (nEl) item.name = nEl.value.trim();
     const cEl = document.getElementById(`im-cat-${item.id}`);
     if (cEl) item.category = cEl.value;
     const pEl = document.getElementById(`im-price-${item.id}`);
@@ -1383,7 +1408,110 @@ async function saveItemMaster() {
     const lEl = document.getElementById(`im-limitHour-${item.id}`);
     if (lEl) item.limitHour = parseFloat(lEl.value) || 0;
   });
+
+  const dupNames = findDuplicateItemNames();
+  if (dupNames.length > 0) {
+    renderItemMasterTable();
+    alert(`商品名が重複しています: ${dupNames.join("、")}\n名前を変更するか、「🧹 重複を統合」ボタンで統合してから保存してください。`);
+    return;
+  }
+
   await saveStoreConfigToCloud(true);
+}
+
+// storesConfig(什器配置・スケジュール設定)内の商品ID参照を idMap = { 旧ID: 新ID } に従って付け替える
+function remapItemIdsInStoreConfig(conf, idMap) {
+  if (!conf) return conf;
+  if (Array.isArray(conf.fixtures)) {
+    conf.fixtures.forEach(sec => {
+      (sec.cells || []).forEach(cell => {
+        if (Object.prototype.hasOwnProperty.call(idMap, cell.itemId)) {
+          cell.itemId = idMap[cell.itemId];
+        }
+      });
+    });
+  }
+  if (conf.schedule) {
+    Object.keys(conf.schedule).forEach(dayType => {
+      const daySchedule = conf.schedule[dayType];
+      if (!daySchedule) return;
+      Object.keys(daySchedule).forEach(key => {
+        if (!Object.prototype.hasOwnProperty.call(idMap, key)) return;
+        const newId = idMap[key];
+        // 統合先IDの設定が既にある場合はそちらを優先し、重複側の設定は破棄する
+        if (!daySchedule[newId]) {
+          daySchedule[newId] = daySchedule[key];
+        }
+        delete daySchedule[key];
+      });
+    });
+  }
+  return conf;
+}
+
+// 商品名が同じ商品を1件に統合し、全店舗の什器配置・スケジュール設定の参照も付け替える
+async function mergeDuplicateItems() {
+  if (!currentUser) return;
+
+  const groups = {};
+  ITEMS.filter(i => i.id !== 0).forEach(item => {
+    const key = (item.name || "").trim();
+    if (!key) return;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+
+  const idMap = {};
+  const dupSummaryLines = [];
+  Object.keys(groups).forEach(name => {
+    const group = groups[name].slice().sort((a, b) => a.id - b.id);
+    if (group.length > 1) {
+      const canonical = group[0];
+      dupSummaryLines.push(`・${name}（${group.length}件 → ID ${canonical.id} に統合）`);
+      group.slice(1).forEach(dup => { idMap[dup.id] = canonical.id; });
+    }
+  });
+
+  if (Object.keys(idMap).length === 0) {
+    alert("重複している商品は見つかりませんでした。");
+    return;
+  }
+
+  const ok = confirm(
+    `以下の重複商品を1件に統合します。\n\n${dupSummaryLines.join("\n")}\n\n` +
+    `全店舗の什器配置・スケジュール設定内にある商品ID参照も自動的に付け替えます。\n` +
+    `この操作は元に戻せません。実行しますか？`
+  );
+  if (!ok) return;
+
+  showLockOverlay("重複商品を統合中...", "全店舗のデータを更新しています。しばらくお待ちください");
+  try {
+    ITEMS = ITEMS.filter(i => i.id === 0 || !Object.prototype.hasOwnProperty.call(idMap, i.id));
+
+    // 現在ロード中の店舗設定はメモリ上で付け替え
+    remapItemIdsInStoreConfig(getActiveStoreConfig(), idMap);
+
+    // 他店舗のstoresConfigはFirestoreから取得して付け替えてから書き戻す
+    const curStoreId = getCurrentStore().id;
+    for (const store of STORE_MASTER) {
+      if (store.id === curStoreId) continue;
+      const doc = await db.collection('storesConfig').doc(store.id).get();
+      if (doc.exists) {
+        const conf = remapItemIdsInStoreConfig(doc.data(), idMap);
+        await db.collection('storesConfig').doc(store.id).set(conf);
+      }
+    }
+
+    await saveStoreConfigToCloud(false);
+    renderItemMasterTable();
+    renderHomeFixtures();
+    alert(`重複を統合しました。\n\n${dupSummaryLines.join("\n")}`);
+  } catch (err) {
+    console.error("Merge Duplicate Items Error:", err);
+    alert("重複の統合中にエラーが発生しました。通信状態を確認してもう一度お試しください。");
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 function renderScheduleMasterTable() {
