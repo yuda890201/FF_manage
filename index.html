@@ -51,20 +51,28 @@
 
   header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 4px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     padding: 4px 8px;
     border-radius: 8px;
     margin-bottom: 6px;
-    height: 40px;
     flex-shrink: 0;
+  }
+  .header-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
   }
   .header-left {
     display: flex;
     align-items: center;
     gap: 6px;
+    overflow-x: auto;
+    min-width: 0;
   }
   .app-title-tag {
     font-size: 11px;
@@ -72,6 +80,8 @@
     color: #38bdf8;
     padding-right: 4px;
     border-right: 1px solid #334155;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .store-badge {
     background: #0284c7;
@@ -83,6 +93,8 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .btn-global-backup {
@@ -96,6 +108,8 @@
     font-weight: 900;
     cursor: pointer;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .btn-global-backup:active { transform: translateY(2px); box-shadow: none; }
 
@@ -110,6 +124,8 @@
     font-weight: 900;
     cursor: pointer;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .btn-global-restore:active { transform: translateY(2px); box-shadow: none; }
 
@@ -120,6 +136,8 @@
     padding: 2px;
     border-radius: 6px;
     border: 1px solid #1e293b;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .nav-tab {
     background: transparent;
@@ -131,6 +149,8 @@
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .nav-tab.active {
     background: #2563eb;
@@ -141,6 +161,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
   }
   .day-badge {
     color: #f8fafc;
@@ -148,6 +169,8 @@
     border-radius: 4px;
     font-size: 10px;
     font-weight: bold;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .day-badge.weekday { background: #475569; }
   .day-badge.saturday { background: #0284c7; }
@@ -160,12 +183,16 @@
     border-radius: 4px;
     font-weight: bold;
     font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .clock {
     font-size: 14px;
     font-weight: 800;
     font-family: "Courier New", monospace;
     color: #38bdf8;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .waste-alert-bar {
@@ -446,25 +473,27 @@
 </div>
 
 <header>
-  <div class="header-left">
-    <div class="app-title-tag">FF管理</div>
-    <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
-    <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成</button>
-    <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元</button>
-    <button class="btn-global-restore" onclick="signOutUser()">ログアウト</button>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
-      <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
-      <button class="nav-tab" onclick="switchViewWithSave('storeMaster')">🏪 店舗マスタ</button>
-      <button class="nav-tab" onclick="switchViewWithSave('itemMaster')">① 商品マスタ</button>
-      <button class="nav-tab" onclick="switchViewWithSave('scheduleMaster')">② スケジュール目標</button>
-      <button class="nav-tab" onclick="switchViewWithSave('layoutMaster')">③ 什器配置</button>
+  <div class="header-row-top">
+    <div class="header-left">
+      <div class="app-title-tag">FF管理</div>
+      <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
+      <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成</button>
+      <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元</button>
+      <button class="btn-global-restore" onclick="signOutUser()">ログアウト</button>
+    </div>
+    <div class="header-right">
+      <div id="dayBadge" class="day-badge weekday">平日</div>
+      <div id="scheduleBadge" class="time-badge">昼 (11:00〜)</div>
+      <div id="clockDisplay" class="clock">--:--:--</div>
     </div>
   </div>
-  <div class="header-right">
-    <div id="dayBadge" class="day-badge weekday">平日</div>
-    <div id="scheduleBadge" class="time-badge">昼 (11:00〜)</div>
-    <div id="clockDisplay" class="clock">--:--:--</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
+    <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
+    <button class="nav-tab" onclick="switchViewWithSave('storeMaster')">🏪 店舗マスタ</button>
+    <button class="nav-tab" onclick="switchViewWithSave('itemMaster')">① 商品マスタ</button>
+    <button class="nav-tab" onclick="switchViewWithSave('scheduleMaster')">② スケジュール目標</button>
+    <button class="nav-tab" onclick="switchViewWithSave('layoutMaster')">③ 什器配置</button>
   </div>
 </header>
 
