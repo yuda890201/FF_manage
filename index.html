@@ -425,6 +425,20 @@
 </head>
 <body>
 
+<div id="login-overlay" style="position:fixed; inset:0; background:#080c16; z-index:9999; display:flex; align-items:center; justify-content:center;">
+  <form id="login-form" style="background:#131b2e; border:1px solid #334155; padding:32px; border-radius:10px; width:300px; color:#f8fafc;">
+    <h2 style="margin-top:0; text-align:center;">FF管理アプリ</h2>
+    <label style="display:block; margin-bottom:12px; font-size:14px;">メールアドレス
+      <input type="email" id="login-email" required autocomplete="username" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
+    </label>
+    <label style="display:block; margin-bottom:18px; font-size:14px;">パスワード
+      <input type="password" id="login-password" required autocomplete="current-password" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
+    </label>
+    <button type="submit" class="btn-save-action" style="width:100%; background:#16a34a;">ログイン</button>
+    <p id="login-error" style="color:#f87171; font-size:13px; margin-bottom:0; min-height:1.2em;"></p>
+  </form>
+</div>
+
 <div class="sync-lock-overlay" id="syncLockOverlay">
   <div class="sync-spinner"></div>
   <div class="sync-lock-text" id="syncLockTitle">クラウドと同期中...</div>
@@ -437,6 +451,7 @@
     <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
     <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成</button>
     <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元</button>
+    <button class="btn-global-restore" onclick="signOutUser()">ログアウト</button>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchViewWithSave('home')">ホーム</button>
       <button class="nav-tab" onclick="switchViewWithSave('record')">📊 実績</button>
@@ -614,124 +629,64 @@
 
 <div id="printSheetContainer"></div>
 
+<!-- Firebase (Firestore + Authentication) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
-const GAS_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwwOAOm9CUyEiEJQf1wb8eXoOfrhQhcliwvFv_m8OdTBodLWgfV_dd3WBMidJ2x_nlw/exec"; 
+// =================================================================
+// 【Firebase設定】Firebaseコンソール「プロジェクトの設定」→「マイアプリ」の値を貼り付けてください。
+// この値は公開情報です(秘密鍵ではありません)。アクセス制御は firestore.rules 側で行います。
+// =================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCR7XieS7IpQLi-wwoF7Pwc8XiusiG6vkg",
+  authDomain: "ff-manage.firebaseapp.com",
+  projectId: "ff-manage",
+  storageBucket: "ff-manage.firebasestorage.app",
+  messagingSenderId: "923495482122",
+  appId: "1:923495482122:web:944a58575437bfcbb570f3"
+};
+let auth = null;
+let db = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+} catch (err) {
+  console.error('Firebase初期化に失敗しました。firebaseConfigを確認してください。', err);
+}
+</script>
+
+<script>
+let currentUser = null;
 
 let STORE_MASTER = [
-  { id: "S001", name: "1号店", area: "福岡中央", memo: "デフォルト店舗①", isCurrent: true },
-  { id: "S002", name: "2号店", area: "博多", memo: "デフォルト店舗②", isCurrent: false }
+  { id: "S001", name: "店舗を設定してください", area: "", memo: "", isCurrent: true }
 ];
 
 let ITEMS = [
-  { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 },
-  { id: 1, name: "ファミチキ", category: "ホッターズ", price: 230, limitHour: 4 },
-  { id: 2, name: "ファミチキレッド", category: "ホッターズ", price: 240, limitHour: 4 },
-  { id: 3, name: "クリスピー", category: "ホッターズ", price: 180, limitHour: 4 },
-  { id: 4, name: "スパイシー", category: "ホッターズ", price: 198, limitHour: 4 },
-  { id: 5, name: "山賊焼", category: "ホッターズ", price: 260, limitHour: 4 },
-  { id: 6, name: "ころじゃが", category: "ホッターズ", price: 180, limitHour: 4 },
-  { id: 7, name: "ハッシュドポテト", category: "ホッターズ", price: 130, limitHour: 4 },
-  { id: 8, name: "ファミコロ", category: "ホッターズ", price: 108, limitHour: 4 },
-  { id: 9, name: "黒豚まん", category: "中華まん", price: 240, limitHour: 6 },
-  { id: 10, name: "肉まん", category: "中華まん", price: 160, limitHour: 6 },
-  { id: 11, name: "ピザまん", category: "中華まん", price: 160, limitHour: 6 },
-  { id: 12, name: "あんまん", category: "中華まん", price: 150, limitHour: 6 },
-  { id: 13, name: "ももタレ", category: "常温総菜", price: 160, limitHour: 8 },
-  { id: 14, name: "かわタレ", category: "常温総菜", price: 160, limitHour: 8 },
-  { id: 15, name: "もも塩", category: "常温総菜", price: 160, limitHour: 8 },
-  { id: 16, name: "かわ塩", category: "常温総菜", price: 160, limitHour: 8 },
-  { id: 17, name: "ジャンボフランク", category: "ホッターズ", price: 190, limitHour: 6 }
+  { id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }
 ];
 
 const DEFAULT_FIXTURES = [
   {
     id: "sec_steam", name: "中華まん什器", category: "中華まん", cols: 2, rows: 6,
-    cells: [
-      { itemId: 9, stock: 1, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 10, stock: 5, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 11, stock: 2, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 12, stock: 1, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }
-    ]
+    cells: Array.from({ length: 12 }, () => ({ itemId: 0, stock: 0, cookTime: null }))
   },
   {
     id: "sec_hotters", name: "ホッターズ什器", category: "ホッターズ", cols: 5, rows: 3,
-    cells: [
-      { itemId: 1, stock: 8, cookTime: null }, { itemId: 2, stock: 6, cookTime: null }, { itemId: 17, stock: 2, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 3, stock: 3, cookTime: null }, { itemId: 4, stock: 2, cookTime: null }, { itemId: 5, stock: 2, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 6, stock: 4, cookTime: null }, { itemId: 7, stock: 2, cookTime: null }, { itemId: 8, stock: 1, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }
-    ]
+    cells: Array.from({ length: 15 }, () => ({ itemId: 0, stock: 0, cookTime: null }))
   },
   {
     id: "sec_ambient", name: "常温総菜什器", category: "常温総菜", cols: 2, rows: 4,
-    cells: [
-      { itemId: 13, stock: 3, cookTime: null }, { itemId: 14, stock: 4, cookTime: null },
-      { itemId: 15, stock: 3, cookTime: null }, { itemId: 16, stock: 3, cookTime: null },
-      { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null },
-      { itemId: 0, stock: 0, cookTime: null }, { itemId: 0, stock: 0, cookTime: null }
-    ]
+    cells: Array.from({ length: 8 }, () => ({ itemId: 0, stock: 0, cookTime: null }))
   }
 ];
 
 const DEFAULT_SCHEDULE = {
-  weekday: {
-    1: { morning: 8, lunch: 12, evening: 12, minRatio: 0.4 },
-    2: { morning: 6, lunch: 12, evening: 12, minRatio: 0.4 },
-    3: { morning: 3, lunch: 4, evening: 3, minRatio: 0.5 },
-    4: { morning: 2, lunch: 4, evening: 2, minRatio: 0.5 },
-    5: { morning: 2, lunch: 2, evening: 2, minRatio: 0.5 },
-    6: { morning: 4, lunch: 4, evening: 4, minRatio: 0.5 },
-    7: { morning: 2, lunch: 4, evening: 4, minRatio: 0.5 },
-    8: { morning: 1, lunch: 2, evening: 2, minRatio: 0.5 },
-    9: { morning: 1, lunch: 1, evening: 1, minRatio: 0.3 },
-    10: { morning: 5, lunch: 5, evening: 16, minRatio: 0.3 },
-    11: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
-    12: { morning: 1, lunch: 1, evening: 1, minRatio: 0.3 },
-    13: { morning: 3, lunch: 4, evening: 5, minRatio: 0.5 },
-    14: { morning: 4, lunch: 4, evening: 6, minRatio: 0.5 },
-    15: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 },
-    16: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 },
-    17: { morning: 2, lunch: 2, evening: 3, minRatio: 0.5 }
-  },
-  saturday: {
-    1: { morning: 9, lunch: 14, evening: 15, minRatio: 0.4 },
-    2: { morning: 7, lunch: 13, evening: 13, minRatio: 0.4 },
-    3: { morning: 4, lunch: 5, evening: 4, minRatio: 0.5 },
-    4: { morning: 3, lunch: 5, evening: 3, minRatio: 0.5 },
-    5: { morning: 3, lunch: 3, evening: 3, minRatio: 0.5 },
-    6: { morning: 5, lunch: 5, evening: 5, minRatio: 0.5 },
-    7: { morning: 3, lunch: 5, evening: 5, minRatio: 0.5 },
-    8: { morning: 2, lunch: 3, evening: 3, minRatio: 0.5 },
-    9: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
-    10: { morning: 7, lunch: 7, evening: 17, minRatio: 0.3 },
-    11: { morning: 3, lunch: 3, evening: 3, minRatio: 0.3 },
-    12: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
-    13: { morning: 4, lunch: 5, evening: 6, minRatio: 0.5 },
-    14: { morning: 5, lunch: 5, evening: 7, minRatio: 0.5 },
-    15: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
-    16: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
-    17: { morning: 3, lunch: 3, evening: 4, minRatio: 0.5 }
-  },
-  sunday: {
-    1: { morning: 10, lunch: 16, evening: 16, minRatio: 0.4 },
-    2: { morning: 8, lunch: 14, evening: 14, minRatio: 0.4 },
-    3: { morning: 4, lunch: 6, evening: 4, minRatio: 0.5 },
-    4: { morning: 3, lunch: 5, evening: 3, minRatio: 0.5 },
-    5: { morning: 3, lunch: 4, evening: 3, minRatio: 0.5 },
-    6: { morning: 5, lunch: 6, evening: 5, minRatio: 0.5 },
-    7: { morning: 3, lunch: 5, evening: 5, minRatio: 0.5 },
-    8: { morning: 2, lunch: 3, evening: 3, minRatio: 0.5 },
-    9: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
-    10: { morning: 8, lunch: 8, evening: 18, minRatio: 0.3 },
-    11: { morning: 3, lunch: 3, evening: 3, minRatio: 0.3 },
-    12: { morning: 2, lunch: 2, evening: 2, minRatio: 0.3 },
-    13: { morning: 4, lunch: 5, evening: 6, minRatio: 0.5 },
-    14: { morning: 5, lunch: 5, evening: 7, minRatio: 0.5 },
-    15: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
-    16: { morning: 4, lunch: 4, evening: 5, minRatio: 0.5 },
-    17: { morning: 3, lunch: 4, evening: 4, minRatio: 0.5 }
-  }
+  weekday: {},
+  saturday: {},
+  sunday: {}
 };
 
 const DEFAULT_TIME_SLOTS = {
@@ -742,11 +697,6 @@ const DEFAULT_TIME_SLOTS = {
 
 let STORES_CONFIG = {
   "S001": {
-    fixtures: JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
-    schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
-    timeSlots: JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
-  },
-  "S002": {
     fixtures: JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
     schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
     timeSlots: JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
@@ -802,35 +752,35 @@ function clearUnsaved() {
 
 // 起動時自動ロード
 async function loadInitialDataFromSpreadsheet() {
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  if (!currentUser) return;
 
   const curStore = getCurrentStore();
   showLockOverlay("データを読み込み中...", `【${curStore.name}】の最新状態を復元しています`);
   try {
-    const res = await fetch(`${GAS_ENDPOINT_URL}?storeId=${curStore.id}`);
-    const data = await res.json();
-    if (data && data.status === "success") {
-      if (data.items && data.items.length > 0) {
-        ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(data.items);
-      }
-      if (data.stores && data.stores.length > 0) {
-        STORE_MASTER = data.stores;
-      }
-      if (data.storesConfig && Object.keys(data.storesConfig).length > 0) {
-        STORES_CONFIG = data.storesConfig;
-      }
-      if (data.snapshots && data.snapshots[curStore.id]) {
-        const snap = data.snapshots[curStore.id];
-        if (snap.fixtures) getActiveStoreConfig().fixtures = snap.fixtures;
-        if (snap.schedule) getActiveStoreConfig().schedule = snap.schedule;
-        if (snap.timeSlots) getActiveStoreConfig().timeSlots = snap.timeSlots;
-      }
-      if (data.todayRecords) {
-        DAILY_ARCHIVES[getTodayDateString()] = data.todayRecords;
-      }
-      applyCurrentStoreData();
-      clearUnsaved();
+    const [itemsDoc, storeMasterDoc, configDoc, archiveDoc] = await Promise.all([
+      db.collection('meta').doc('items').get(),
+      db.collection('meta').doc('storeMaster').get(),
+      db.collection('storesConfig').doc(curStore.id).get(),
+      db.collection('dailyArchives').doc(`${curStore.id}_${getTodayDateString()}`).get()
+    ]);
+
+    if (itemsDoc.exists && itemsDoc.data().items && itemsDoc.data().items.length > 0) {
+      ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(itemsDoc.data().items);
     }
+    if (storeMasterDoc.exists && storeMasterDoc.data().stores && storeMasterDoc.data().stores.length > 0) {
+      STORE_MASTER = storeMasterDoc.data().stores;
+    }
+    if (configDoc.exists) {
+      const conf = configDoc.data();
+      if (conf.fixtures) getActiveStoreConfig().fixtures = conf.fixtures;
+      if (conf.schedule) getActiveStoreConfig().schedule = conf.schedule;
+      if (conf.timeSlots) getActiveStoreConfig().timeSlots = conf.timeSlots;
+    }
+    if (archiveDoc.exists) {
+      DAILY_ARCHIVES[getTodayDateString()] = archiveDoc.data().counts || {};
+    }
+    applyCurrentStoreData();
+    clearUnsaved();
   } catch (err) {
     console.warn("データ読込失敗:", err);
   } finally {
@@ -840,7 +790,7 @@ async function loadInitialDataFromSpreadsheet() {
 
 // 📦 手動バックアップ作成
 async function handleManualBackup() {
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  if (!currentUser) return;
   const curStore = getCurrentStore();
   saveCurrentViewInputs();
 
@@ -852,11 +802,7 @@ async function handleManualBackup() {
       storeConfig: getActiveStoreConfig()
     };
 
-    await fetch(GAS_ENDPOINT_URL, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "save_manual_backup", storeId: curStore.id, payload: payloadData })
-    });
+    await db.collection('manualBackups').doc(curStore.id).set(payloadData);
 
     alert(`【${curStore.name}】の手動バックアップを正常に作成しました！`);
   } catch (err) {
@@ -869,24 +815,21 @@ async function handleManualBackup() {
 
 // 🔄 バックアップ復元
 async function handleManualRestore() {
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  if (!currentUser) return;
   const curStore = getCurrentStore();
 
   if (!confirm(`【${curStore.name}】を手動バックアップの状態に復元しますか？`)) return;
 
   showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
   try {
-    const res = await fetch(`${GAS_ENDPOINT_URL}?storeId=${curStore.id}`);
-    const data = await res.json();
-    if (data && data.manualBackup) {
-      const bck = data.manualBackup;
+    const doc = await db.collection('manualBackups').doc(curStore.id).get();
+    if (doc.exists) {
+      const bck = doc.data();
       if (bck.items && bck.items.length > 0) {
         ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
       }
       if (bck.storeConfig) {
         STORES_CONFIG[curStore.id] = bck.storeConfig;
-      } else if (bck.storesConfig && bck.storesConfig[curStore.id]) {
-        STORES_CONFIG[curStore.id] = bck.storesConfig[curStore.id];
       }
       applyCurrentStoreData();
       clearUnsaved();
@@ -904,22 +847,13 @@ async function handleManualRestore() {
 
 // クラウドへの設定保存（明示的な「保存」ボタン押下時、または変更ありでの画面遷移時のみ実行）
 async function saveStoreConfigToCloud(showFeedback = true) {
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  if (!currentUser) return;
   const curStore = getCurrentStore();
   if (showFeedback) showLockOverlay("設定を保存中...", `【${curStore.name}】の設定を同期しています`);
-  
-  const payloadData = {
-    items: ITEMS,
-    stores: STORE_MASTER,
-    storeConfig: getActiveStoreConfig()
-  };
 
   try {
-    await fetch(GAS_ENDPOINT_URL, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "sync_store_config", storeId: curStore.id, payload: payloadData })
-    });
+    await db.collection('meta').doc('items').set({ items: ITEMS.filter(i => i.id !== 0) });
+    await db.collection('meta').doc('storeMaster').set({ stores: STORE_MASTER });
     await saveSnapshotToCloud(false);
     clearUnsaved();
   } catch (err) {
@@ -930,16 +864,12 @@ async function saveStoreConfigToCloud(showFeedback = true) {
 }
 
 async function saveSnapshotToCloud(showFeedback = false) {
-  if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL.trim() === "") return;
+  if (!currentUser) return;
   const curStore = getCurrentStore();
   const fullSnapshot = getActiveStoreConfig();
 
   try {
-    await fetch(GAS_ENDPOINT_URL, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "save_snapshot", storeId: curStore.id, snapshot: fullSnapshot })
-    });
+    await db.collection('storesConfig').doc(curStore.id).set(fullSnapshot);
   } catch (err) {
     console.error("Snapshot Save Error:", err);
   }
@@ -1005,12 +935,13 @@ function recordArchiveAndSync(itemId, type, qty) {
     salesAmount: type === 'sell' ? item.price * qty : 0, wasteAmount: type === 'waste' ? item.price * qty : 0
   };
 
-  if (!GAS_ENDPOINT_URL) return;
-  fetch(GAS_ENDPOINT_URL, {
-    method: "POST", mode: "no-cors",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ type: "record_log", payload: payloadData, snapshot: getActiveStoreConfig() })
-  }).catch(err => console.error("GAS送信エラー:", err));
+  if (!currentUser) return;
+
+  db.collection('recordLog').add(payloadData).catch(err => console.error("Firestore送信エラー:", err));
+
+  db.collection('dailyArchives').doc(`${curStore.id}_${dateKey}`)
+    .set({ counts: DAILY_ARCHIVES[dateKey] }, { merge: true })
+    .catch(err => console.error("集計保存エラー:", err));
 }
 
 function updateClock() {
@@ -1655,7 +1586,41 @@ function printPlanSheets() {
 window.addEventListener('resize', autoFitTitles);
 setInterval(updateClock, 1000);
 updateClock();
-loadInitialDataFromSpreadsheet();
+
+function signOutUser() {
+  auth.signOut();
+}
+
+document.getElementById('login-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.innerText = '';
+  if (!auth) {
+    errEl.innerText = 'Firebase設定が未投入です。管理者にお問い合わせください。';
+    return;
+  }
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  auth.signInWithEmailAndPassword(email, password).catch(err => {
+    errEl.innerText = 'ログインに失敗しました。メールアドレスとパスワードをご確認ください。';
+    console.error(err);
+  });
+});
+
+if (auth) {
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      currentUser = user;
+      document.getElementById('login-overlay').style.display = 'none';
+      loadInitialDataFromSpreadsheet();
+    } else {
+      currentUser = null;
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+  });
+} else {
+  document.getElementById('login-error').innerText = 'Firebase設定が未投入です。管理者にお問い合わせください。';
+}
 </script>
 </body>
 </html>
