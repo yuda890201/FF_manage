@@ -576,12 +576,21 @@
         <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
       </div>
     </div>
+    <div style="display:flex; gap:8px; margin-bottom:6px; flex-shrink:0;">
+      <input class="ctrl-input" style="max-width:200px;" type="text" id="im-search" placeholder="🔍 商品名で絞り込み" oninput="onItemMasterFilterChange()">
+      <select class="ctrl-select" style="max-width:140px;" id="im-cat-filter" onchange="onItemMasterFilterChange()">
+        <option value="全て">分類: すべて</option>
+        <option value="ホッターズ">ホッターズ</option>
+        <option value="中華まん">中華まん</option>
+        <option value="常温総菜">常温総菜</option>
+      </select>
+    </div>
     <div class="table-scroll">
       <table class="master-table">
         <thead>
           <tr>
             <th style="width:40px;">ID</th><th>商品名</th><th>分類</th>
-            <th style="width:90px;">価格(円)</th><th style="width:100px;">販売期限(h)</th>
+            <th style="width:90px;">価格(円)</th><th style="width:100px;">販売期限(h)</th><th style="width:36px;"></th>
           </tr>
         </thead>
         <tbody id="itemMasterBody"></tbody>
@@ -1378,37 +1387,9 @@ function findDuplicateItemNames() {
   return Object.keys(nameCount).filter(name => nameCount[name] > 1);
 }
 
-function renderItemMasterTable() {
-  const tbody = document.getElementById("itemMasterBody");
-  const dupNames = new Set(findDuplicateItemNames());
-  tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => {
-    const isDup = dupNames.has((item.name || "").trim());
-    return `
-    <tr ${isDup ? 'style="background:#fef3c7;"' : ''}>
-      <td>${item.id}${isDup ? ' <span style="color:#d97706; font-size:10px;" title="商品名が重複しています">⚠重複</span>' : ''}</td>
-      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved(); renderItemMasterTable();"></td>
-      <td>
-        <select class="ctrl-select" id="im-cat-${item.id}" onchange="markUnsaved()">
-          <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
-          <option value="中華まん" ${item.category === '中華まん' ? 'selected' : ''}>中華まん</option>
-          <option value="常温総菜" ${item.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
-        </select>
-      </td>
-      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
-      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
-    </tr>
-  `;
-  }).join("");
-}
-
-function addNewItemRow() {
-  const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
-  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0 });
-  markUnsaved();
-  renderItemMasterTable();
-}
-
-async function saveItemMaster() {
+// 商品マスタ画面に描画中の入力欄の値をITEMSへ反映する（保存はしない）。
+// 再描画（絞り込み・削除・重複表示更新など）の前に必ず呼び、未保存の入力を失わないようにする。
+function syncItemMasterInputsToMemory() {
   ITEMS.forEach(item => {
     if (item.id === 0) return;
     const nEl = document.getElementById(`im-name-${item.id}`);
@@ -1420,6 +1401,142 @@ async function saveItemMaster() {
     const lEl = document.getElementById(`im-limitHour-${item.id}`);
     if (lEl) item.limitHour = parseFloat(lEl.value) || 0;
   });
+}
+
+let itemMasterFilters = { search: "", category: "全て" };
+
+function onItemMasterFilterChange() {
+  const searchEl = document.getElementById("im-search");
+  const catEl = document.getElementById("im-cat-filter");
+  itemMasterFilters.search = searchEl ? searchEl.value : "";
+  itemMasterFilters.category = catEl ? catEl.value : "全て";
+  renderItemMasterTable();
+}
+
+function renderItemMasterTable() {
+  syncItemMasterInputsToMemory();
+
+  const tbody = document.getElementById("itemMasterBody");
+  const dupNames = new Set(findDuplicateItemNames());
+  const searchText = (itemMasterFilters.search || "").trim();
+  const catFilter = itemMasterFilters.category || "全て";
+
+  const visibleItems = ITEMS.filter(i => i.id !== 0)
+    .filter(i => catFilter === "全て" || i.category === catFilter)
+    .filter(i => !searchText || (i.name || "").includes(searchText));
+
+  tbody.innerHTML = visibleItems.map(item => {
+    const isDup = dupNames.has((item.name || "").trim());
+    return `
+    <tr ${isDup ? 'style="background:#fef3c7;"' : ''}>
+      <td>${item.id}${isDup ? ' <span style="color:#d97706; font-size:10px;" title="商品名が重複しています">⚠重複</span>' : ''}</td>
+      <td><input class="ctrl-input" type="text" id="im-name-${item.id}" value="${item.name}" onchange="markUnsaved(); renderItemMasterTable();"></td>
+      <td>
+        <select class="ctrl-select" id="im-cat-${item.id}" onchange="markUnsaved(); renderItemMasterTable();">
+          <option value="ホッターズ" ${item.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
+          <option value="中華まん" ${item.category === '中華まん' ? 'selected' : ''}>中華まん</option>
+          <option value="常温総菜" ${item.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
+        </select>
+      </td>
+      <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
+      <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
+      <td><button type="button" style="background:#ef4444; color:#fff; border:none; border-radius:4px; padding:4px 6px; font-size:11px; cursor:pointer;" title="削除" onclick="deleteItemRow(${item.id})">🗑</button></td>
+    </tr>
+  `;
+  }).join("");
+
+  if (visibleItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:16px;">該当する商品がありません</td></tr>`;
+  }
+}
+
+function addNewItemRow() {
+  syncItemMasterInputsToMemory();
+  const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
+  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0 });
+  markUnsaved();
+  renderItemMasterTable();
+}
+
+// storesConfig(什器配置・スケジュール設定)から指定した商品への参照を除去する（セルは「空き」に、スケジュール設定は削除）
+function clearItemReferencesInStoreConfig(conf, itemId) {
+  let cellCount = 0;
+  let changed = false;
+  if (conf && Array.isArray(conf.fixtures)) {
+    conf.fixtures.forEach(sec => {
+      (sec.cells || []).forEach(cell => {
+        if (cell.itemId === itemId) {
+          cell.itemId = 0;
+          cell.stock = 0;
+          cell.cookTime = null;
+          cellCount++;
+          changed = true;
+        }
+      });
+    });
+  }
+  if (conf && conf.schedule) {
+    Object.keys(conf.schedule).forEach(dayType => {
+      const daySchedule = conf.schedule[dayType];
+      if (daySchedule && Object.prototype.hasOwnProperty.call(daySchedule, itemId)) {
+        delete daySchedule[itemId];
+        changed = true;
+      }
+    });
+  }
+  return { cellCount, changed };
+}
+
+// 商品マスタから商品を削除する。全店舗の什器配置・スケジュール設定内の参照も自動的に「空き」へ戻す
+async function deleteItemRow(id) {
+  if (!currentUser) return;
+  syncItemMasterInputsToMemory();
+  const item = ITEMS.find(i => i.id === id);
+  if (!item) return;
+
+  const ok = confirm(
+    `「${item.name}」(ID:${id})を商品マスタから削除しますか？\n` +
+    `全店舗の什器に配置されている場合、該当セルは「(空き)」に戻ります。\n` +
+    `この操作は元に戻せません。`
+  );
+  if (!ok) return;
+
+  showLockOverlay("商品を削除中...", "全店舗のデータを確認・更新しています");
+  try {
+    let totalCells = 0;
+    const curStoreId = getCurrentStore().id;
+
+    const curResult = clearItemReferencesInStoreConfig(getActiveStoreConfig(), id);
+    totalCells += curResult.cellCount;
+
+    for (const store of STORE_MASTER) {
+      if (store.id === curStoreId) continue;
+      const doc = await db.collection('storesConfig').doc(store.id).get();
+      if (doc.exists) {
+        const conf = doc.data();
+        const result = clearItemReferencesInStoreConfig(conf, id);
+        totalCells += result.cellCount;
+        if (result.changed) {
+          await db.collection('storesConfig').doc(store.id).set(conf);
+        }
+      }
+    }
+
+    ITEMS = ITEMS.filter(i => i.id !== id);
+    await saveStoreConfigToCloud(false);
+    renderItemMasterTable();
+    renderHomeFixtures();
+    alert(`「${item.name}」を削除しました。${totalCells > 0 ? `（什器から${totalCells}箇所を「空き」に戻しました）` : ''}`);
+  } catch (err) {
+    console.error("Delete Item Error:", err);
+    alert("商品の削除に失敗しました。通信状態を確認してもう一度お試しください。");
+  } finally {
+    hideLockOverlay();
+  }
+}
+
+async function saveItemMaster() {
+  syncItemMasterInputsToMemory();
 
   const dupNames = findDuplicateItemNames();
   if (dupNames.length > 0) {
