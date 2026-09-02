@@ -860,7 +860,7 @@ async function handleManualRestore() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
 
-  if (!confirm(`【${curStore.name}】を手動バックアップの状態に復元しますか？`)) return;
+  if (!confirm(`【${curStore.name}】を手動バックアップの状態に復元し、クラウドにも保存します。\n（商品マスタは全店舗共通のため、この操作で全店舗の商品マスタが復元されます）\nよろしいですか？`)) return;
 
   showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
   try {
@@ -874,8 +874,11 @@ async function handleManualRestore() {
         STORES_CONFIG[curStore.id] = bck.storeConfig;
       }
       applyCurrentStoreData();
-      clearUnsaved();
-      alert(`【${curStore.name}】の復元が完了しました！`);
+      // 復元した内容をメモリ上だけでなくクラウドにも保存する（保存しないと再読み込みで復元前の状態に戻ってしまうため）
+      await saveStoreConfigToCloud(false);
+      renderItemMasterTable();
+      renderHomeFixtures();
+      alert(`【${curStore.name}】の復元が完了し、クラウドにも保存しました！`);
     } else {
       alert("この店舗の手動バックアップデータが見つかりませんでした。");
     }
