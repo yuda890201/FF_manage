@@ -1463,25 +1463,33 @@ async function mergeDuplicateItems() {
   if (!currentUser) return;
 
   const groups = {};
-  ITEMS.filter(i => i.id !== 0).forEach(item => {
+  ITEMS.forEach((item, idx) => {
+    if (item.id === 0) return;
     const key = (item.name || "").trim();
     if (!key) return;
     if (!groups[key]) groups[key] = [];
-    groups[key].push(item);
+    groups[key].push({ item, idx });
   });
 
+  // 商品名だけでなくIDまで一致した「完全な複製行」が紛れているケースがあるため、
+  // ID(値)ではなく配列インデックスで削除対象を管理する（IDでの削除は、統合先と
+  // 同じIDを持つ複製行があった場合に統合先ごと消えてしまう不具合を引き起こす）
   const idMap = {};
+  const removeIdxSet = new Set();
   const dupSummaryLines = [];
   Object.keys(groups).forEach(name => {
-    const group = groups[name].slice().sort((a, b) => a.id - b.id);
+    const group = groups[name].slice().sort((a, b) => a.item.id - b.item.id);
     if (group.length > 1) {
-      const canonical = group[0];
+      const canonical = group[0].item;
       dupSummaryLines.push(`・${name}（${group.length}件 → ID ${canonical.id} に統合）`);
-      group.slice(1).forEach(dup => { idMap[dup.id] = canonical.id; });
+      group.slice(1).forEach(({ item, idx }) => {
+        if (item.id !== canonical.id) idMap[item.id] = canonical.id;
+        removeIdxSet.add(idx);
+      });
     }
   });
 
-  if (Object.keys(idMap).length === 0) {
+  if (removeIdxSet.size === 0) {
     alert("重複している商品は見つかりませんでした。");
     return;
   }
@@ -1495,7 +1503,7 @@ async function mergeDuplicateItems() {
 
   showLockOverlay("重複商品を統合中...", "全店舗のデータを更新しています。しばらくお待ちください");
   try {
-    ITEMS = ITEMS.filter(i => i.id === 0 || !Object.prototype.hasOwnProperty.call(idMap, i.id));
+    ITEMS = ITEMS.filter((item, idx) => item.id === 0 || !removeIdxSet.has(idx));
 
     // 現在ロード中の店舗設定はメモリ上で付け替え
     remapItemIdsInStoreConfig(getActiveStoreConfig(), idMap);
