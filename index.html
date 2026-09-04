@@ -562,6 +562,17 @@
         <tbody id="storeMasterBody"></tbody>
       </table>
     </div>
+    <div style="margin-top:10px; border-top:1px solid #334155; padding-top:8px; flex-shrink:0;">
+      <button class="btn-save-action" style="background:#8b5cf6; width:100%;" onclick="toggleLegacyRestorePanel()">🗂 旧バックアップJSONから復元</button>
+      <div id="legacyRestorePanel" style="display:none; margin-top:8px;">
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px; line-height:1.5;">
+          移行前(GAS/スプレッドシート版)のバックアップJSONを貼り付けて、対象店舗の什器配置・スケジュール設定を復元します。商品は名前で現在の商品マスタと自動照合します（在庫数・調理時刻は古い情報のためリセットされます）。
+        </div>
+        <select class="ctrl-select" id="legacyRestoreStoreSelect" style="margin-bottom:6px;"></select>
+        <textarea class="ctrl-input" id="legacyRestoreJsonInput" style="width:100%; height:140px; font-family:monospace; font-size:10px; resize:vertical;" placeholder="ここに旧バックアップのJSONを貼り付け"></textarea>
+        <button class="btn-save-action" style="background:#f59e0b; margin-top:6px; width:100%;" onclick="runLegacyRestore()">この内容で復元する</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1375,6 +1386,150 @@ async function saveStoreMaster() {
   applyCurrentStoreData();
   await saveStoreConfigToCloud(true);
   switchView('home');
+}
+
+// 🗂 旧バックアップ(GAS/スプレッドシート版)JSONからの復元
+function toggleLegacyRestorePanel() {
+  const panel = document.getElementById("legacyRestorePanel");
+  const willShow = panel.style.display === "none";
+  panel.style.display = willShow ? "block" : "none";
+  if (willShow) {
+    const sel = document.getElementById("legacyRestoreStoreSelect");
+    sel.innerHTML = STORE_MASTER.map(s => `<option value="${s.id}">${s.name}（ID:${s.id}）</option>`).join("");
+  }
+}
+
+// スプレッドシートからコピペした際に付く二重引用符エスケープ（"..."" ... ""..."）を正規化してからJSONとして読む
+function parseLegacyBackupJson(raw) {
+  let text = (raw || "").trim();
+  if (text.startsWith('"') && text.endsWith('"')) {
+    text = text.slice(1, -1).replace(/""/g, '"');
+  }
+  return JSON.parse(text);
+}
+
+async function runLegacyRestore() {
+  if (!currentUser) return;
+  const storeSel = document.getElementById("legacyRestoreStoreSelect");
+  const targetStoreId = storeSel ? storeSel.value : null;
+  const targetStore = STORE_MASTER.find(s => s.id === targetStoreId);
+  if (!targetStore) {
+    alert("復元先の店舗を選択してください。");
+    return;
+  }
+
+  const rawText = document.getElementById("legacyRestoreJsonInput").value;
+  let data;
+  try {
+    data = parseLegacyBackupJson(rawText);
+  } catch (err) {
+    alert("JSONの読み込みに失敗しました。貼り付けた内容を確認してください。\n" + err.message);
+    return;
+  }
+
+  // { items, stores, storeConfig } 形式、または直接 { fixtures, schedule, timeSlots } 形式のどちらにも対応
+  const oldConf = data.storeConfig || data;
+  const oldFixtures = oldConf.fixtures;
+  const oldSchedule = oldConf.schedule || {};
+  const oldTimeSlots = oldConf.timeSlots;
+  const oldItemsList = data.items || [];
+
+  if (!Array.isArray(oldFixtures)) {
+    alert("貼り付けたJSONから什器配置(fixtures)が見つかりませんでした。内容を確認してください。");
+    return;
+  }
+
+  // 旧商品ID→商品名（重複行は同一内容のため後勝ちで問題ない）
+  const oldIdToName = {};
+  oldItemsList.forEach(i => {
+    if (i.id === 0) return;
+    oldIdToName[i.id] = i.name;
+  });
+
+  // 商品名で現行の商品マスタ(ITEMS)と照合し、旧ID→新IDのマップを作る
+  const idMap = {};
+  const unmatched = [];
+  const usedOldIds = new Set();
+  oldFixtures.forEach(sec => (sec.cells || []).forEach(c => { if (c.itemId !== 0) usedOldIds.add(c.itemId); }));
+  Object.keys(oldSchedule).forEach(dayType => {
+    Object.keys(oldSchedule[dayType] || {}).forEach(id => usedOldIds.add(parseInt(id)));
+  });
+
+  usedOldIds.forEach(oldId => {
+    const name = (oldIdToName[oldId] || "").trim();
+    if (!name) { unmatched.push(`ID${oldId}(名前不明)`); return; }
+    const match = ITEMS.find(i => i.id !== 0 && i.name === name);
+    if (match) {
+      idMap[oldId] = match.id;
+    } else {
+      unmatched.push(`${name}(旧ID${oldId})`);
+    }
+  });
+
+  // fixturesを新IDへ置き換え。在庫・調理時刻は古い情報のためリセットする
+  const newFixtures = JSON.parse(JSON.stringify(oldFixtures));
+  newFixtures.forEach(sec => {
+    (sec.cells || []).forEach(cell => {
+      if (cell.itemId === 0) return;
+      const newId = idMap[cell.itemId];
+      cell.itemId = newId !== undefined ? newId : 0;
+      cell.stock = 0;
+      cell.cookTime = null;
+    });
+  });
+
+  // scheduleを新IDへ置き換え。minRatio(割合)は、現行のminQty(個数)モデルに合わせて
+  // 「evening × minRatio」を切り上げた参考値に変換する（保存後に見直しが必要）
+  const newSchedule = {};
+  ['weekday', 'saturday', 'sunday'].forEach(dayType => {
+    newSchedule[dayType] = {};
+    const oldDay = oldSchedule[dayType] || {};
+    Object.keys(oldDay).forEach(oldIdStr => {
+      const newId = idMap[parseInt(oldIdStr)];
+      if (newId === undefined) return;
+      const t = oldDay[oldIdStr];
+      newSchedule[dayType][newId] = {
+        morning: t.morning || 0,
+        lunch: t.lunch || 0,
+        evening: t.evening || 0,
+        minQty: Math.ceil((t.evening || 0) * (t.minRatio || 0))
+      };
+    });
+  });
+
+  const newConfig = {
+    fixtures: newFixtures,
+    schedule: newSchedule,
+    timeSlots: oldTimeSlots || JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
+  };
+
+  const ok = confirm(
+    `店舗「${targetStore.name}」(ID:${targetStore.id})に復元します。\n\n` +
+    `什器区画数: ${newFixtures.length}\n` +
+    `未マッチの商品: ${unmatched.length}件${unmatched.length ? "　(" + unmatched.join("、") + ")" : ""}\n\n` +
+    `未マッチの商品が置かれていたセルは「空き」になります。\n` +
+    `在庫数・調理時刻はリセットされます(0個/未調理)。\n` +
+    `最低個数は旧設定の割合から自動計算した参考値です。復元後に商品スケジュールマスタで見直してください。\n\n` +
+    `現在のこの店舗のデータを上書きします。よろしいですか？`
+  );
+  if (!ok) return;
+
+  showLockOverlay("復元中...", `【${targetStore.name}】のデータを復元しています`);
+  try {
+    await db.collection('storesConfig').doc(targetStore.id).set(newConfig);
+    if (getCurrentStore().id === targetStore.id) {
+      STORES_CONFIG[targetStore.id] = newConfig;
+      applyCurrentStoreData();
+      renderHomeFixtures();
+    }
+    alert(`【${targetStore.name}】の復元が完了しました！`);
+    document.getElementById("legacyRestoreJsonInput").value = "";
+  } catch (err) {
+    console.error("Legacy Restore Error:", err);
+    alert("復元に失敗しました。通信状態を確認してもう一度お試しください。");
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 function findDuplicateItemNames() {
