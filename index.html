@@ -455,11 +455,8 @@
 <div id="login-overlay" style="position:fixed; inset:0; background:#080c16; z-index:9999; display:flex; align-items:center; justify-content:center;">
   <form id="login-form" style="background:#131b2e; border:1px solid #334155; padding:32px; border-radius:10px; width:300px; color:#f8fafc;">
     <h2 style="margin-top:0; text-align:center;">FF管理アプリ</h2>
-    <label style="display:block; margin-bottom:12px; font-size:14px;">メールアドレス
-      <input type="email" id="login-email" required autocomplete="username" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
-    </label>
-    <label style="display:block; margin-bottom:18px; font-size:14px;">パスワード
-      <input type="password" id="login-password" required autocomplete="current-password" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
+    <label style="display:block; margin-bottom:18px; font-size:14px;">店舗番号(PIN)
+      <input type="password" id="login-pin" required autocomplete="current-password" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
     </label>
     <button type="submit" class="btn-save-action" style="width:100%; background:#16a34a;">ログイン</button>
     <p id="login-error" style="color:#f87171; font-size:13px; margin-bottom:0; min-height:1.2em;"></p>
@@ -712,6 +709,11 @@ try {
 
 <script>
 let currentUser = null;
+// ログイン(店舗番号PIN)で指定された店舗ID。端末ごとにlocalStorageで保持し、
+// 全店舗共有のSTORE_MASTER側の`isCurrent`フラグには依存しない(複数店舗が
+// 同時にログインしても互いの選択を上書きしないようにするため)。
+let currentStoreId = localStorage.getItem('ffmanage_current_store_id') || '';
+let pendingLoginStoreId = null;
 
 let STORE_MASTER = [
   { id: "S001", name: "店舗を設定してください", area: "", memo: "", isCurrent: true }
@@ -765,7 +767,9 @@ let hasUnsavedChanges = false; // 未保存フラグ
 let currentActiveView = "home";
 
 function getCurrentStore() {
-  return STORE_MASTER.find(s => s.isCurrent) || STORE_MASTER[0];
+  return STORE_MASTER.find(s => s.id === currentStoreId)
+    || STORE_MASTER.find(s => s.isCurrent)
+    || STORE_MASTER[0];
 }
 
 function getActiveStoreConfig() {
@@ -807,14 +811,11 @@ function clearUnsaved() {
 async function loadInitialDataFromSpreadsheet() {
   if (!currentUser) return;
 
-  const curStore = getCurrentStore();
-  showLockOverlay("データを読み込み中...", `【${curStore.name}】の最新状態を復元しています`);
+  showLockOverlay("データを読み込み中...", "最新の状態を復元しています");
   try {
-    const [itemsDoc, storeMasterDoc, configDoc, archiveDoc] = await Promise.all([
+    const [itemsDoc, storeMasterDoc] = await Promise.all([
       db.collection('meta').doc('items').get(),
-      db.collection('meta').doc('storeMaster').get(),
-      db.collection('storesConfig').doc(curStore.id).get(),
-      db.collection('dailyArchives').doc(`${curStore.id}_${getTodayDateString()}`).get()
+      db.collection('meta').doc('storeMaster').get()
     ]);
 
     if (itemsDoc.exists && itemsDoc.data().items && itemsDoc.data().items.length > 0) {
@@ -823,6 +824,21 @@ async function loadInitialDataFromSpreadsheet() {
     if (storeMasterDoc.exists && storeMasterDoc.data().stores && storeMasterDoc.data().stores.length > 0) {
       STORE_MASTER = storeMasterDoc.data().stores;
     }
+
+    // ログインPINに対応する店舗がSTORE_MASTERにまだ無ければ、その場で新規作成して永続化する
+    if (currentStoreId && !STORE_MASTER.some(s => s.id === currentStoreId)) {
+      STORE_MASTER.push({ id: currentStoreId, name: "未設定(店舗名を編集してください)", area: "", memo: "" });
+      await db.collection('meta').doc('storeMaster').set({ stores: STORE_MASTER });
+    }
+
+    const curStore = getCurrentStore();
+    showLockOverlay("データを読み込み中...", `【${curStore.name}】の最新状態を復元しています`);
+
+    const [configDoc, archiveDoc] = await Promise.all([
+      db.collection('storesConfig').doc(curStore.id).get(),
+      db.collection('dailyArchives').doc(`${curStore.id}_${getTodayDateString()}`).get()
+    ]);
+
     if (configDoc.exists) {
       const conf = configDoc.data();
       if (conf.fixtures) getActiveStoreConfig().fixtures = conf.fixtures;
@@ -1345,7 +1361,7 @@ function renderStoreMasterTable() {
   tbody.innerHTML = STORE_MASTER.map((store, idx) => `
     <tr>
       <td style="text-align:center;">
-        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.isCurrent ? 'checked' : ''} onchange="markUnsaved()">
+        <input type="radio" name="currentStoreRadio" value="${store.id}" ${store.id === currentStoreId ? 'checked' : ''} onchange="markUnsaved()">
       </td>
       <td><input class="ctrl-input" type="text" id="stm-id-${idx}" value="${store.id}" onchange="markUnsaved()"></td>
       <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}" onchange="markUnsaved()"></td>
@@ -1357,7 +1373,7 @@ function renderStoreMasterTable() {
 
 function addNewStoreRow() {
   const nextId = `S00${STORE_MASTER.length + 1}`;
-  STORE_MASTER.push({ id: nextId, name: "新規店舗", area: "福岡", memo: "", isCurrent: false });
+  STORE_MASTER.push({ id: nextId, name: "新規店舗", area: "福岡", memo: "" });
   STORES_CONFIG[nextId] = {
     fixtures: JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
     schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
@@ -1370,7 +1386,7 @@ function addNewStoreRow() {
 async function saveStoreMaster() {
   const selectedRadio = document.querySelector('input[name="currentStoreRadio"]:checked');
   const selectedId = selectedRadio ? selectedRadio.value : STORE_MASTER[0].id;
-  
+
   STORE_MASTER.forEach((store, idx) => {
     const idEl = document.getElementById(`stm-id-${idx}`);
     if (idEl) store.id = idEl.value;
@@ -1380,9 +1396,13 @@ async function saveStoreMaster() {
     if (areaEl) store.area = areaEl.value;
     const memoEl = document.getElementById(`stm-memo-${idx}`);
     if (memoEl) store.memo = memoEl.value;
-    store.isCurrent = (store.id === selectedId);
   });
-  
+
+  // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
+  // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
+  currentStoreId = selectedId;
+  localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+
   applyCurrentStoreData();
   await saveStoreConfigToCloud(true);
   switchView('home');
@@ -2041,6 +2061,9 @@ function signOutUser() {
   auth.signOut();
 }
 
+// 店舗番号PINでのログイン。店舗番号ごとに `store-{番号}@ff-manage.local` という
+// 固定形式のダミーメールアドレスでFirebase Authenticationの共有アカウントを
+// 登録しておき、その番号自体をパスワード(PIN)として扱う。
 document.getElementById('login-form').addEventListener('submit', function(e) {
   e.preventDefault();
   const errEl = document.getElementById('login-error');
@@ -2049,10 +2072,12 @@ document.getElementById('login-form').addEventListener('submit', function(e) {
     errEl.innerText = 'Firebase設定が未投入です。管理者にお問い合わせください。';
     return;
   }
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  auth.signInWithEmailAndPassword(email, password).catch(err => {
-    errEl.innerText = 'ログインに失敗しました。メールアドレスとパスワードをご確認ください。';
+  const pin = document.getElementById('login-pin').value.trim();
+  const email = `store-${pin}@ff-manage.local`;
+  auth.signInWithEmailAndPassword(email, pin).then(() => {
+    pendingLoginStoreId = pin;
+  }).catch(err => {
+    errEl.innerText = '店舗番号(PIN)が正しくありません。';
     console.error(err);
   });
 });
@@ -2061,6 +2086,11 @@ if (auth) {
   auth.onAuthStateChanged(function(user) {
     if (user) {
       currentUser = user;
+      if (pendingLoginStoreId) {
+        currentStoreId = pendingLoginStoreId;
+        localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+        pendingLoginStoreId = null;
+      }
       document.getElementById('login-overlay').style.display = 'none';
       loadInitialDataFromSpreadsheet();
     } else {
