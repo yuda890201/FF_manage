@@ -598,7 +598,7 @@
         <thead>
           <tr>
             <th style="width:40px;">ID</th><th>商品名</th><th style="width:90px;">分類</th>
-            <th style="width:64px;">価格(円)</th><th style="width:64px;">販売期限(h)</th><th style="width:36px;"></th>
+            <th style="width:64px;">価格(円)</th><th style="width:64px;">販売期限(h)</th><th style="width:36px;">画像</th><th style="width:36px;"></th>
           </tr>
         </thead>
         <tbody id="itemMasterBody"></tbody>
@@ -679,10 +679,14 @@
 
 <div id="printSheetContainer"></div>
 
-<!-- Firebase (Firestore + Authentication) -->
+<!-- 商品マスタの画像アップロード用（非表示のファイル選択） -->
+<input type="file" id="itemImageFileInput" accept="image/*" style="display:none;" onchange="handleItemImageFileSelected(event)">
+
+<!-- Firebase (Firestore + Authentication + Storage) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script>
 // =================================================================
 // 【Firebase設定】Firebaseコンソール「プロジェクトの設定」→「マイアプリ」の値を貼り付けてください。
@@ -698,10 +702,12 @@ const firebaseConfig = {
 };
 let auth = null;
 let db = null;
+let storage = null;
 try {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
+  storage = firebase.storage();
 } catch (err) {
   console.error('Firebase初期化に失敗しました。firebaseConfigを確認してください。', err);
 }
@@ -1615,20 +1621,85 @@ function renderItemMasterTable() {
       </td>
       <td><input class="ctrl-input" type="number" id="im-price-${item.id}" value="${item.price}" onchange="markUnsaved()"></td>
       <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
+      <td style="text-align:center; white-space:nowrap;">
+        ${item.imageUrl ? `<img src="${item.imageUrl}" style="width:20px; height:20px; object-fit:cover; border-radius:4px; vertical-align:middle;" onerror="this.style.display='none';">` : ''}
+        <button type="button" style="background:none; border:none; cursor:pointer; font-size:13px; padding:2px;" title="写真をアップロード" onclick="triggerItemImageUpload(${item.id})">📷</button>
+        <button type="button" style="background:none; border:none; cursor:pointer; font-size:13px; padding:2px;" title="画像URLを直接入力" onclick="promptItemImage(${item.id})">🔗</button>
+      </td>
       <td><button type="button" style="background:#ef4444; color:#fff; border:none; border-radius:4px; padding:4px 6px; font-size:11px; cursor:pointer;" title="削除" onclick="deleteItemRow(${item.id})">🗑</button></td>
     </tr>
   `;
   }).join("");
 
   if (visibleItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:16px;">該当する商品がありません</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding:16px;">該当する商品がありません</td></tr>`;
+  }
+}
+
+function promptItemImage(id) {
+  syncItemMasterInputsToMemory();
+  const item = ITEMS.find(i => i.id === id);
+  if (!item) return;
+  const url = prompt(`「${item.name}」の画像URLを入力してください（クリアする場合は空欄のままOK）`, item.imageUrl || "");
+  if (url === null) return;
+  item.imageUrl = url.trim();
+  markUnsaved();
+  renderItemMasterTable();
+}
+
+// 📷 商品画像のアップロード（Firebase Storage）
+let pendingImageUploadItemId = null;
+
+function triggerItemImageUpload(id) {
+  if (!currentUser) return;
+  syncItemMasterInputsToMemory();
+  pendingImageUploadItemId = id;
+  document.getElementById("itemImageFileInput").click();
+}
+
+async function handleItemImageFileSelected(event) {
+  const fileInput = event.target;
+  const file = fileInput.files && fileInput.files[0];
+  const itemId = pendingImageUploadItemId;
+  pendingImageUploadItemId = null;
+  fileInput.value = ""; // 同じファイルを選び直せるようにリセット
+  if (!file || itemId === null) return;
+
+  const item = ITEMS.find(i => i.id === itemId);
+  if (!item) return;
+
+  if (!storage) {
+    alert("Firebase Storageが利用できません。「🔗」ボタンからGyazo等でアップロードした画像のURLを直接入力してください。");
+    return;
+  }
+
+  showLockOverlay("画像をアップロード中...", `「${item.name}」の写真をアップロードしています`);
+  try {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `itemImages/${itemId}_${Date.now()}.${ext}`;
+    const ref = storage.ref().child(path);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+    item.imageUrl = url;
+    markUnsaved();
+    renderItemMasterTable();
+    alert(`「${item.name}」の画像をアップロードしました。`);
+  } catch (err) {
+    console.error("Item Image Upload Error:", err);
+    alert(
+      "画像のアップロードに失敗しました。Firebaseの課金プラン(Blaze)が必要な場合があります。\n" +
+      "その場合はGyazo等の画像アップロードサービスにアップロードし、「🔗」ボタンからそのURLを直接入力してください。\n\n" +
+      "エラー内容: " + (err && err.message ? err.message : err)
+    );
+  } finally {
+    hideLockOverlay();
   }
 }
 
 function addNewItemRow() {
   syncItemMasterInputsToMemory();
   const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
-  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0 });
+  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0, imageUrl: "" });
   markUnsaved();
   renderItemMasterTable();
 }
@@ -1909,12 +1980,31 @@ function renderLayoutMasterEditor() {
     sec.cells.forEach((cell, cIdx) => {
       const optHtml = ITEMS.filter(i => i.id === 0 || i.category === sec.category)
         .map(i => `<option value="${i.id}" ${i.id === cell.itemId ? 'selected' : ''}>${i.name}</option>`).join("");
+      const selectedItem = ITEMS.find(i => i.id === cell.itemId);
+      const imgUrl = selectedItem && selectedItem.imageUrl ? selectedItem.imageUrl : "";
       const cellBox = document.createElement("div");
       cellBox.className = "edit-cell-box";
-      cellBox.innerHTML = `<select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved()">${optHtml}</select>`;
+      cellBox.innerHTML = `
+        <img id="cell-img-${sIdx}-${cIdx}" src="${imgUrl}" style="width:100%; height:28px; object-fit:cover; border-radius:3px; margin-bottom:2px; ${imgUrl ? '' : 'display:none;'}" onerror="this.style.display='none';">
+        <select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved(); updateCellImagePreview(${sIdx}, ${cIdx});">${optHtml}</select>
+      `;
       matrixEl.appendChild(cellBox);
     });
   });
+}
+
+function updateCellImagePreview(sIdx, cIdx) {
+  const sel = document.getElementById(`cell-select-${sIdx}-${cIdx}`);
+  const img = document.getElementById(`cell-img-${sIdx}-${cIdx}`);
+  if (!sel || !img) return;
+  const item = ITEMS.find(i => i.id === parseInt(sel.value));
+  if (item && item.imageUrl) {
+    img.src = item.imageUrl;
+    img.style.display = "block";
+  } else {
+    img.removeAttribute('src');
+    img.style.display = "none";
+  }
 }
 
 function changeSectionCat(sIdx, newCat) {

@@ -5,7 +5,11 @@
 このアプリはFirebase Authentication(店舗番号PINコード方式)とCloud Firestoreでデータを管理しています。
 
 - `index.html` 内の `firebaseConfig`(空欄)に、Firebaseコンソール「プロジェクトの設定」→「マイアプリ」で取得できる値を貼り付けてください。
-- Firestore Security Rules(`firestore.rules`)は `main` ブランチへのpush時にGitHub Actionsで自動デプロイされます。デプロイには、リポジトリシークレット `FIREBASE_SERVICE_ACCOUNT`(サービスアカウントJSON)の登録、サービスアカウントへの `Service Usage Consumer` / `Firebase Rules Admin` ロールの付与、`.firebaserc` の `default` プロジェクトIDの設定が必要です。
+- Firestore Security Rules(`firestore.rules`)・Storage Security Rules(`storage.rules`)は `main` ブランチへのpush時にGitHub Actionsで自動デプロイされます。デプロイには、リポジトリシークレット `FIREBASE_SERVICE_ACCOUNT`(サービスアカウントJSON)の登録、サービスアカウントへの `Service Usage Consumer` / `Firebase Rules Admin` / `Firebase Storage Admin`(または `Storage Object Admin`)ロールの付与、`.firebaserc` の `default` プロジェクトIDの設定が必要です。
+
+### 商品画像のアップロード (Firebase Storage)
+
+商品マスタの「📷」ボタンから、スマートフォンのカメラロール等の画像をFirebase Storageへ直接アップロードできます。Firebase Storageの利用にはプロジェクトによって課金プラン(Blaze)への切り替えが必要になる場合があります。アップロードが失敗する場合は、「🔗」ボタンからGyazo等の外部画像アップロードサービスのURLを直接入力してください(この場合Firebase Storageは使用しません)。
 
 ### ログイン(店舗番号PINコード)
 
