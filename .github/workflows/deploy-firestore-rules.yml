@@ -1,4 +1,4 @@
-name: Deploy Firestore Rules
+name: Deploy Firebase Rules
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
     paths:
       - 'firestore.rules'
       - 'firestore.indexes.json'
+      - 'storage.rules'
       - 'firebase.json'
       - '.firebaserc'
 
@@ -26,7 +27,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy Firestore rules and indexes
-        run: firebase deploy --only firestore:rules,firestore:indexes --non-interactive
+      - name: Deploy Firestore and Storage rules
+        run: firebase deploy --only firestore:rules,firestore:indexes,storage:rules --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
