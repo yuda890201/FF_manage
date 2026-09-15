@@ -1,0 +1,12 @@
+{
+  "name": "ff-manage-functions",
+  "description": "FF管理アプリ用 Cloud Functions（新商品のAI自動登録）",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-functions": "^5.1.1"
+  },
+  "private": true
+}

@@ -571,6 +571,7 @@
             <th style="width:150px;">店舗名</th>
             <th style="width:150px;">エリア/担当</th>
             <th style="width:150px;">連絡先/備考</th>
+            <th style="width:44px;"></th>
           </tr>
         </thead>
         <tbody id="storeMasterBody"></tbody>
@@ -597,6 +598,7 @@
       <div class="master-title">📦 商品マスタ（全店共通）</div>
       <div style="display:flex; gap:8px;">
         <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewItemRow()">＋ 商品追加</button>
+        <button class="btn-save-action" style="background:#8b5cf6;" onclick="triggerAiItemRegistration()">📸 AIで撮って登録</button>
         <button class="btn-save-action" style="background:#f59e0b;" onclick="mergeDuplicateItems()">🧹 重複を統合</button>
         <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
       </div>
@@ -699,11 +701,15 @@
 <!-- 商品マスタの画像アップロード用（非表示のファイル選択） -->
 <input type="file" id="itemImageFileInput" accept="image/*" style="display:none;" onchange="handleItemImageFileSelected(event)">
 
-<!-- Firebase (Firestore + Authentication + Storage) -->
+<!-- 商品マスタのAI自動登録用（非表示のファイル選択） -->
+<input type="file" id="aiItemPhotoInput" accept="image/*" style="display:none;" onchange="handleAiItemPhotoSelected(event)">
+
+<!-- Firebase (Firestore + Authentication + Storage + Functions) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script>
 // =================================================================
 // 【Firebase設定】Firebaseコンソール「プロジェクトの設定」→「マイアプリ」の値を貼り付けてください。
@@ -720,11 +726,13 @@ const firebaseConfig = {
 let auth = null;
 let db = null;
 let storage = null;
+let cloudFunctions = null;
 try {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
   storage = firebase.storage();
+  cloudFunctions = firebase.functions('asia-northeast1'); // functions/index.js のregion指定と合わせる
 } catch (err) {
   console.error('Firebase初期化に失敗しました。firebaseConfigを確認してください。', err);
 }
@@ -1390,11 +1398,28 @@ function renderStoreMasterTable() {
       <td><input class="ctrl-input" type="text" id="stm-name-${idx}" value="${store.name}" onchange="markUnsaved()"></td>
       <td><input class="ctrl-input" type="text" id="stm-area-${idx}" value="${store.area}" onchange="markUnsaved()"></td>
       <td><input class="ctrl-input" type="text" id="stm-memo-${idx}" value="${store.memo}" onchange="markUnsaved()"></td>
+      <td><button type="button" style="background:#ef4444; color:#fff; border:none; border-radius:4px; padding:6px 10px; min-height:32px; font-size:13px; cursor:pointer;" title="削除" onclick="deleteStoreRow(${idx})">🗑</button></td>
     </tr>
   `).join("");
 }
 
+// 画面に描画中の入力欄の値をSTORE_MASTERへ反映する（保存はしない）。
+// 追加・削除など再描画を伴う操作の前に必ず呼び、未保存の入力を失わないようにする。
+function syncStoreMasterInputsToMemory() {
+  STORE_MASTER.forEach((store, idx) => {
+    const idEl = document.getElementById(`stm-id-${idx}`);
+    if (idEl) store.id = idEl.value;
+    const nameEl = document.getElementById(`stm-name-${idx}`);
+    if (nameEl) store.name = nameEl.value;
+    const areaEl = document.getElementById(`stm-area-${idx}`);
+    if (areaEl) store.area = areaEl.value;
+    const memoEl = document.getElementById(`stm-memo-${idx}`);
+    if (memoEl) store.memo = memoEl.value;
+  });
+}
+
 function addNewStoreRow() {
+  syncStoreMasterInputsToMemory();
   const nextId = `S00${STORE_MASTER.length + 1}`;
   STORE_MASTER.push({ id: nextId, name: "新規店舗", area: "福岡", memo: "" });
   STORES_CONFIG[nextId] = {
@@ -1406,6 +1431,49 @@ function addNewStoreRow() {
   renderStoreMasterTable();
 }
 
+// 🗑 店舗を削除する。この店舗の什器配置・スケジュール設定もクラウドから削除する
+async function deleteStoreRow(idx) {
+  if (!currentUser) return;
+  syncStoreMasterInputsToMemory();
+  const store = STORE_MASTER[idx];
+  if (!store) return;
+
+  if (STORE_MASTER.length <= 1) {
+    alert("最後の1店舗は削除できません。");
+    return;
+  }
+
+  const ok = confirm(
+    `「${store.name}」(ID:${store.id})を削除しますか？\n` +
+    `この店舗の什器配置・スケジュール設定もクラウドから削除されます。\n` +
+    `この操作は元に戻せません。`
+  );
+  if (!ok) return;
+
+  showLockOverlay("店舗を削除中...", `【${store.name}】を削除しています`);
+  try {
+    STORE_MASTER.splice(idx, 1);
+    delete STORES_CONFIG[store.id];
+
+    await db.collection('storesConfig').doc(store.id).delete();
+    await db.collection('meta').doc('storeMaster').set({ stores: STORE_MASTER });
+
+    if (currentStoreId === store.id) {
+      currentStoreId = STORE_MASTER[0].id;
+      localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+      applyCurrentStoreData();
+    }
+
+    renderStoreMasterTable();
+    alert(`「${store.name}」を削除しました。`);
+  } catch (err) {
+    console.error("Delete Store Error:", err);
+    alert("店舗の削除に失敗しました。通信状態を確認してもう一度お試しください。");
+  } finally {
+    hideLockOverlay();
+  }
+}
+
 async function saveStoreMaster() {
   // 選択中の店舗ID自体をこの画面で編集した場合、ラジオボタンのvalue(編集前のID)を
   // そのまま使うと編集後のIDと一致せず選択が外れてしまうため、値ではなく行番号で
@@ -1413,16 +1481,7 @@ async function saveStoreMaster() {
   const radios = Array.from(document.querySelectorAll('input[name="currentStoreRadio"]'));
   const selectedIdx = Math.max(0, radios.findIndex(r => r.checked));
 
-  STORE_MASTER.forEach((store, idx) => {
-    const idEl = document.getElementById(`stm-id-${idx}`);
-    if (idEl) store.id = idEl.value;
-    const nameEl = document.getElementById(`stm-name-${idx}`);
-    if (nameEl) store.name = nameEl.value;
-    const areaEl = document.getElementById(`stm-area-${idx}`);
-    if (areaEl) store.area = areaEl.value;
-    const memoEl = document.getElementById(`stm-memo-${idx}`);
-    if (memoEl) store.memo = memoEl.value;
-  });
+  syncStoreMasterInputsToMemory();
 
   // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
   // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
@@ -1734,6 +1793,112 @@ function addNewItemRow() {
   if (searchEl) searchEl.value = "";
 
   renderItemMasterTable();
+}
+
+// 🤖 写真からAIが商品名・分類・価格・販売期限を読み取り、新規商品として登録する
+function triggerAiItemRegistration() {
+  if (!currentUser) return;
+  if (!cloudFunctions) {
+    alert("AI登録機能が利用できません(Cloud Functionsが未設定です)。管理者にお問い合わせください。");
+    return;
+  }
+  syncItemMasterInputsToMemory();
+  document.getElementById("aiItemPhotoInput").click();
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // data:image/jpeg;base64,xxxxx… の先頭部分を取り除き、base64本体だけを渡す
+      const base64 = String(reader.result).split(",")[1] || "";
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleAiItemPhotoSelected(event) {
+  const fileInput = event.target;
+  const file = fileInput.files && fileInput.files[0];
+  fileInput.value = ""; // 同じファイルを選び直せるようにリセット
+  if (!file) return;
+
+  showLockOverlay("AIが商品情報を解析中...", "写真から商品名・分類・価格などを読み取っています");
+  let info;
+  try {
+    const imageBase64 = await readFileAsBase64(file);
+    const mimeType = file.type || "image/jpeg";
+    const callAnalyze = cloudFunctions.httpsCallable("analyzeNewItemPhoto");
+    const result = await callAnalyze({ imageBase64, mimeType });
+    info = result.data || {};
+  } catch (err) {
+    console.error("AI Item Registration Error:", err);
+    hideLockOverlay();
+    alert("AIによる商品情報の読み取りに失敗しました。\n" + (err && err.message ? err.message : "時間をおいて再度お試しください。"));
+    return;
+  }
+  hideLockOverlay();
+
+  const name = String(info.name || "新規商品").trim();
+  const category = info.category || "ホッターズ";
+  const price = info.price || 0;
+  const limitHour = info.limitHour || 0;
+
+  syncItemMasterInputsToMemory();
+  const isDuplicateName = ITEMS.some(i => i.id !== 0 && i.name.trim() === name);
+
+  // 写真投稿だけで登録が完了するように、確認ダイアログでOKした時点でそのままクラウドへ保存する
+  // (保存忘れ・見落としを防ぐため、商品マスタ画面での手動保存は不要にしている)
+  const ok = confirm(
+    `AIが商品情報を読み取りました。この内容で登録しますか？\n\n` +
+    `商品名: ${name}\n分類: ${category}\n価格: ${price}円\n販売期限: ${limitHour}時間` +
+    (isDuplicateName ? `\n\n⚠ 同じ名前の商品が既に登録されています。このまま登録すると重複します。` : "")
+  );
+  if (!ok) {
+    alert("登録をキャンセルしました。写真を撮り直すか、商品マスタから手動で登録してください。");
+    return;
+  }
+
+  showLockOverlay("商品を登録中...", "写真をアップロードし、商品マスタに登録しています");
+  try {
+    const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
+    const newItem = { id: nextId, name, category, price, limitHour, imageUrl: "" };
+    ITEMS.push(newItem);
+    markUnsaved();
+
+    // 同じ写真をそのまま商品画像としてもアップロードする(失敗しても商品登録自体は成立させる)
+    if (storage) {
+      try {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `itemImages/${nextId}_${Date.now()}.${ext}`;
+        const ref = storage.ref().child(path);
+        await ref.put(file);
+        newItem.imageUrl = await ref.getDownloadURL();
+      } catch (imgErr) {
+        console.error("AI登録時の画像アップロードに失敗:", imgErr);
+      }
+    }
+
+    await saveStoreConfigToCloud(false);
+
+    itemMasterFilters.search = "";
+    itemMasterFilters.category = "全て";
+    const searchEl = document.getElementById("im-search");
+    if (searchEl) searchEl.value = "";
+    const catFilterEl = document.getElementById("im-cat-filter");
+    if (catFilterEl) catFilterEl.value = "全て";
+    renderItemMasterTable();
+
+    alert(`「${newItem.name}」を商品マスタに登録しました。`);
+  } catch (err) {
+    console.error("AI Item Save Error:", err);
+    renderItemMasterTable();
+    alert("商品はこの端末には追加されましたが、クラウドへの保存に失敗しました。商品マスタ画面の「💾 保存」ボタンでもう一度保存してください。");
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 // storesConfig(什器配置・スケジュール設定)から指定した商品への参照を除去する（セルは「空き」に、スケジュール設定は削除）
