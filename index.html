@@ -598,7 +598,7 @@
       <div class="master-title">📦 商品マスタ（全店共通）</div>
       <div style="display:flex; gap:8px;">
         <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewItemRow()">＋ 商品追加</button>
-        <button class="btn-save-action" style="background:#8b5cf6;" onclick="triggerAiItemRegistration()">🤖 AIで登録</button>
+        <button class="btn-save-action" style="background:#8b5cf6;" onclick="triggerAiItemRegistration()">📸 AIで撮って登録</button>
         <button class="btn-save-action" style="background:#f59e0b;" onclick="mergeDuplicateItems()">🧹 重複を統合</button>
         <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
       </div>
@@ -1826,23 +1826,45 @@ async function handleAiItemPhotoSelected(event) {
   if (!file) return;
 
   showLockOverlay("AIが商品情報を解析中...", "写真から商品名・分類・価格などを読み取っています");
+  let info;
   try {
     const imageBase64 = await readFileAsBase64(file);
     const mimeType = file.type || "image/jpeg";
-
     const callAnalyze = cloudFunctions.httpsCallable("analyzeNewItemPhoto");
     const result = await callAnalyze({ imageBase64, mimeType });
-    const info = result.data || {};
+    info = result.data || {};
+  } catch (err) {
+    console.error("AI Item Registration Error:", err);
+    hideLockOverlay();
+    alert("AIによる商品情報の読み取りに失敗しました。\n" + (err && err.message ? err.message : "時間をおいて再度お試しください。"));
+    return;
+  }
+  hideLockOverlay();
 
+  const name = String(info.name || "新規商品").trim();
+  const category = info.category || "ホッターズ";
+  const price = info.price || 0;
+  const limitHour = info.limitHour || 0;
+
+  syncItemMasterInputsToMemory();
+  const isDuplicateName = ITEMS.some(i => i.id !== 0 && i.name.trim() === name);
+
+  // 写真投稿だけで登録が完了するように、確認ダイアログでOKした時点でそのままクラウドへ保存する
+  // (保存忘れ・見落としを防ぐため、商品マスタ画面での手動保存は不要にしている)
+  const ok = confirm(
+    `AIが商品情報を読み取りました。この内容で登録しますか？\n\n` +
+    `商品名: ${name}\n分類: ${category}\n価格: ${price}円\n販売期限: ${limitHour}時間` +
+    (isDuplicateName ? `\n\n⚠ 同じ名前の商品が既に登録されています。このまま登録すると重複します。` : "")
+  );
+  if (!ok) {
+    alert("登録をキャンセルしました。写真を撮り直すか、商品マスタから手動で登録してください。");
+    return;
+  }
+
+  showLockOverlay("商品を登録中...", "写真をアップロードし、商品マスタに登録しています");
+  try {
     const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
-    const newItem = {
-      id: nextId,
-      name: info.name || "新規商品",
-      category: info.category || "ホッターズ",
-      price: info.price || 0,
-      limitHour: info.limitHour || 0,
-      imageUrl: ""
-    };
+    const newItem = { id: nextId, name, category, price, limitHour, imageUrl: "" };
     ITEMS.push(newItem);
     markUnsaved();
 
@@ -1859,21 +1881,21 @@ async function handleAiItemPhotoSelected(event) {
       }
     }
 
+    await saveStoreConfigToCloud(false);
+
     itemMasterFilters.search = "";
     itemMasterFilters.category = "全て";
     const searchEl = document.getElementById("im-search");
     if (searchEl) searchEl.value = "";
     const catFilterEl = document.getElementById("im-cat-filter");
     if (catFilterEl) catFilterEl.value = "全て";
-
     renderItemMasterTable();
-    alert(
-      `AIが商品情報を読み取りました。内容を確認し、必要に応じて修正してから保存してください。\n\n` +
-      `商品名: ${newItem.name}\n分類: ${newItem.category}\n価格: ${newItem.price}円\n販売期限: ${newItem.limitHour}時間`
-    );
+
+    alert(`「${newItem.name}」を商品マスタに登録しました。`);
   } catch (err) {
-    console.error("AI Item Registration Error:", err);
-    alert("AIによる商品情報の読み取りに失敗しました。\n" + (err && err.message ? err.message : "時間をおいて再度お試しください。"));
+    console.error("AI Item Save Error:", err);
+    renderItemMasterTable();
+    alert("商品はこの端末には追加されましたが、クラウドへの保存に失敗しました。商品マスタ画面の「💾 保存」ボタンでもう一度保存してください。");
   } finally {
     hideLockOverlay();
   }
