@@ -7,16 +7,39 @@ const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
 const VALID_CATEGORIES = ["ホッターズ", "中華まん", "常温総菜"];
 const MODEL = "claude-sonnet-5";
 
-const EXTRACT_PROMPT = `あなたはコンビニ商品の商品マスタ登録を手伝うアシスタントです。
-添付した商品パッケージ・POP・ラベルの写真から、以下の情報をJSONのみで出力してください。
-説明文やコードブロックは付けず、JSONオブジェクト単体だけを出力してください。
+const EXTRACT_INSTRUCTION =
+  "この商品パッケージ・POP・ラベルの写真から商品情報を読み取り、register_item ツールを呼び出してください。" +
+  "読み取れない項目は0にしてください。推測で埋めず、写真に写っている情報だけを使ってください。";
 
-{
-  "name": "商品名（日本語。パッケージ記載の名称をそのまま）",
-  "category": "ホッターズ" か "中華まん" か "常温総菜" のいずれか一つ（ホッターズ=から揚げ・フランクフルト等の温かいホットスナック、中華まん=肉まん等の蒸し中華まん、常温総菜=惣菜パック等の常温商品）,
-  "price": 税込価格（数値。読み取れなければ0）,
-  "limitHour": 陳列後の販売期限時間（数値。パッケージに記載がなければ0）
-}`;
+// 出力のブレを抑えるため、自由記述のJSONではなくTool Use(関数呼び出し)で
+// 型・必須項目を強制する。カテゴリも列挙値(enum)で3種類に固定している。
+const REGISTER_ITEM_TOOL = {
+  name: "register_item",
+  description: "商品パッケージの写真から読み取った商品情報を登録する",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description: "商品名（日本語。パッケージに記載されている名称そのまま）"
+      },
+      category: {
+        type: "string",
+        enum: VALID_CATEGORIES,
+        description: "商品分類。ホッターズ=から揚げ・フランクフルト等の温かいホットスナック、中華まん=肉まん等の蒸し中華まん、常温総菜=惣菜パック等の常温商品"
+      },
+      price: {
+        type: "number",
+        description: "税込価格。パッケージから読み取れなければ0"
+      },
+      limitHour: {
+        type: "number",
+        description: "陳列後の販売期限時間。パッケージに記載がなければ0"
+      }
+    },
+    required: ["name", "category", "price", "limitHour"]
+  }
+};
 
 exports.analyzeNewItemPhoto = onCall(
   { secrets: [anthropicApiKey], region: "asia-northeast1", timeoutSeconds: 60 },
@@ -43,12 +66,17 @@ exports.analyzeNewItemPhoto = onCall(
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 300,
+          // temperature 0 + Tool Use(下記tools/tool_choice)で、同じ写真に対する
+          // 出力(商品名・分類・価格・期限)のブレを最小限に抑える
+          temperature: 0,
+          tools: [REGISTER_ITEM_TOOL],
+          tool_choice: { type: "tool", name: "register_item" },
           messages: [
             {
               role: "user",
               content: [
                 { type: "image", source: { type: "base64", media_type, data: imageBase64 } },
-                { type: "text", text: EXTRACT_PROMPT }
+                { type: "text", text: EXTRACT_INSTRUCTION }
               ]
             }
           ]
@@ -66,22 +94,13 @@ exports.analyzeNewItemPhoto = onCall(
     }
 
     const data = await response.json();
-    const text = data && data.content && data.content[0] && data.content[0].text;
-    if (!text) {
-      throw new HttpsError("internal", "AIから有効な応答が得られませんでした。");
-    }
+    const toolUseBlock = Array.isArray(data && data.content)
+      ? data.content.find((block) => block.type === "tool_use" && block.name === "register_item")
+      : null;
+    const parsed = toolUseBlock && toolUseBlock.input;
 
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch (err) {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch (err2) { /* fallthrough */ }
-      }
-    }
     if (!parsed || typeof parsed !== "object") {
-      logger.error("AIの応答をJSONとして解析できませんでした", { text });
+      logger.error("AIの応答からtool_useブロックを取得できませんでした", { data });
       throw new HttpsError("internal", "AIの応答を解析できませんでした。");
     }
 
