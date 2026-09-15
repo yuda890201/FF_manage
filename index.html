@@ -38,6 +38,12 @@
     -webkit-user-select: none;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", sans-serif;
   }
+  /* 入力欄・テキストエリアは長押しでの選択・コピー&ペーストができるようにする
+     (上のuser-select:noneはボタン連打時の誤選択防止が目的で、フォーム部品には不要) */
+  input, textarea, select {
+    user-select: text;
+    -webkit-user-select: text;
+  }
 
   body {
     background: var(--bg-main);
@@ -359,12 +365,16 @@
   }
   .master-header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    gap: 6px;
     margin-bottom: 10px;
     flex-shrink: 0;
   }
-  .master-title { font-size: 13px; font-weight: 800; color: #38bdf8; }
+  /* タイトルは折り返さず自然な幅を保ち、収まらない場合はボタン側を次の行に折り返す
+     (title側を圧縮させると文字単位で不自然に折れてしまうため) */
+  .master-title { font-size: 13px; font-weight: 800; color: #38bdf8; white-space: nowrap; }
   .btn-save-action {
     background: linear-gradient(180deg, var(--btn-save-top) 0%, var(--btn-save-bottom) 100%);
     box-shadow: 0 3px 0 var(--btn-save-shadow);
@@ -378,11 +388,18 @@
   }
   .btn-save-action:active { transform: translateY(2px); }
 
-  .table-scroll { flex: 1; overflow-y: auto; border: 1px solid #334155; border-radius: 8px; }
-  .master-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
-  .master-table th { background: #0f172a; padding: 6px 8px; border-bottom: 1px solid #334155; color: #94a3b8; position: sticky; top: 0; z-index: 2; }
+  .table-scroll { flex: 1; overflow: auto; border: 1px solid #334155; border-radius: 8px; }
+  /* 列幅が窮屈な画面でも各列を無理に圧縮せず、横スクロールで見せる
+     (min-widthを指定しないと、幅の指定がない列だけが極端に潰れてしまう) */
+  .master-table { width: 100%; min-width: max-content; border-collapse: collapse; font-size: 11px; text-align: left; }
+  .master-table th { background: #0f172a; padding: 6px 8px; border-bottom: 1px solid #334155; color: #94a3b8; position: sticky; top: 0; z-index: 2; white-space: nowrap; }
   .master-table td { padding: 5px 8px; border-bottom: 1px solid #1e293b; }
-  .ctrl-input, .ctrl-select { background: #0f172a; border: 1px solid #475569; border-radius: 4px; color: #fff; padding: 4px 6px; font-size: 11px; width: 100%; }
+  /* iOS Safariはテキスト入力欄が16px未満だとフォーカス時に自動でズームしてしまうため、
+     16px以上を確保する（selectはネイティブのピッカーが開くだけでズームは発生しないため
+     従来より少し大きい13pxとし、狭い列でも収まりやすくしている） */
+  .ctrl-input, .ctrl-select { background: #0f172a; border: 1px solid #475569; border-radius: 4px; color: #fff; padding: 6px 6px; width: 100%; }
+  .ctrl-input { font-size: 16px; }
+  .ctrl-select { font-size: 13px; }
 
   .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; flex-shrink: 0; }
   .summary-card { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; }
@@ -549,11 +566,11 @@
       <table class="master-table">
         <thead>
           <tr>
-            <th style="width:50px;">運用選択</th>
-            <th style="width:90px;">店舗ID</th>
-            <th style="width:140px;">店舗名</th>
-            <th style="width:120px;">エリア/担当</th>
-            <th style="width:120px;">連絡先/備考</th>
+            <th style="width:60px;">運用選択</th>
+            <th style="width:110px;">店舗ID</th>
+            <th style="width:150px;">店舗名</th>
+            <th style="width:150px;">エリア/担当</th>
+            <th style="width:150px;">連絡先/備考</th>
           </tr>
         </thead>
         <tbody id="storeMasterBody"></tbody>
@@ -566,7 +583,7 @@
           移行前(GAS/スプレッドシート版)のバックアップJSONを貼り付けて、対象店舗の什器配置・スケジュール設定を復元します。商品は名前で現在の商品マスタと自動照合します（在庫数・調理時刻は古い情報のためリセットされます）。
         </div>
         <select class="ctrl-select" id="legacyRestoreStoreSelect" style="margin-bottom:6px;"></select>
-        <textarea class="ctrl-input" id="legacyRestoreJsonInput" style="width:100%; height:140px; font-family:monospace; font-size:10px; resize:vertical;" placeholder="ここに旧バックアップのJSONを貼り付け"></textarea>
+        <textarea class="ctrl-input" id="legacyRestoreJsonInput" style="width:100%; height:140px; font-family:monospace; font-size:14px; resize:vertical;" placeholder="ここに旧バックアップのJSONを貼り付け"></textarea>
         <button class="btn-save-action" style="background:#f59e0b; margin-top:6px; width:100%;" onclick="runLegacyRestore()">この内容で復元する</button>
       </div>
     </div>
@@ -597,8 +614,8 @@
       <table class="master-table">
         <thead>
           <tr>
-            <th style="width:40px;">ID</th><th>商品名</th><th style="width:90px;">分類</th>
-            <th style="width:64px;">価格(円)</th><th style="width:64px;">販売期限(h)</th><th style="width:36px;">画像</th><th style="width:36px;"></th>
+            <th style="width:40px;">ID</th><th>商品名</th><th style="width:118px;">分類</th>
+            <th style="width:82px;">価格(円)</th><th style="width:82px;">販売期限(h)</th><th style="width:56px;">画像</th><th style="width:44px;"></th>
           </tr>
         </thead>
         <tbody id="itemMasterBody"></tbody>
@@ -624,13 +641,13 @@
     </div>
     <div style="display:flex; gap:8px; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>朝:</span><input class="ctrl-input" style="width:50px;" id="slot-morning-start" value="06:00" onchange="markUnsaved()">〜
+        <span>朝:</span><input class="ctrl-input" style="width:60px;" id="slot-morning-start" value="06:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>昼:</span><input class="ctrl-input" style="width:50px;" id="slot-lunch-start" value="11:00" onchange="markUnsaved()">〜
+        <span>昼:</span><input class="ctrl-input" style="width:60px;" id="slot-lunch-start" value="11:00" onchange="markUnsaved()">〜
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
-        <span>夕・夜:</span><input class="ctrl-input" style="width:50px;" id="slot-evening-start" value="16:00" onchange="markUnsaved()">〜
+        <span>夕・夜:</span><input class="ctrl-input" style="width:60px;" id="slot-evening-start" value="16:00" onchange="markUnsaved()">〜
       </div>
     </div>
     <div class="table-scroll">
@@ -1390,8 +1407,11 @@ function addNewStoreRow() {
 }
 
 async function saveStoreMaster() {
-  const selectedRadio = document.querySelector('input[name="currentStoreRadio"]:checked');
-  const selectedId = selectedRadio ? selectedRadio.value : STORE_MASTER[0].id;
+  // 選択中の店舗ID自体をこの画面で編集した場合、ラジオボタンのvalue(編集前のID)を
+  // そのまま使うと編集後のIDと一致せず選択が外れてしまうため、値ではなく行番号で
+  // 選択店舗を特定し、更新後のIDを参照する
+  const radios = Array.from(document.querySelectorAll('input[name="currentStoreRadio"]'));
+  const selectedIdx = Math.max(0, radios.findIndex(r => r.checked));
 
   STORE_MASTER.forEach((store, idx) => {
     const idEl = document.getElementById(`stm-id-${idx}`);
@@ -1406,7 +1426,7 @@ async function saveStoreMaster() {
 
   // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
   // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
-  currentStoreId = selectedId;
+  currentStoreId = (STORE_MASTER[selectedIdx] || STORE_MASTER[0]).id;
   localStorage.setItem('ffmanage_current_store_id', currentStoreId);
 
   applyCurrentStoreData();
@@ -1623,10 +1643,10 @@ function renderItemMasterTable() {
       <td><input class="ctrl-input" type="number" step="0.5" id="im-limitHour-${item.id}" value="${item.limitHour}" onchange="markUnsaved()"></td>
       <td style="text-align:center; white-space:nowrap;">
         ${item.imageUrl ? `<img src="${item.imageUrl}" style="width:20px; height:20px; object-fit:cover; border-radius:4px; vertical-align:middle;" onerror="this.style.display='none';">` : ''}
-        <button type="button" style="background:none; border:none; cursor:pointer; font-size:13px; padding:2px;" title="写真をアップロード" onclick="triggerItemImageUpload(${item.id})">📷</button>
-        <button type="button" style="background:none; border:none; cursor:pointer; font-size:13px; padding:2px;" title="画像URLを直接入力" onclick="promptItemImage(${item.id})">🔗</button>
+        <button type="button" style="background:none; border:none; cursor:pointer; font-size:16px; padding:6px 4px; min-width:32px; min-height:32px;" title="写真をアップロード" onclick="triggerItemImageUpload(${item.id})">📷</button>
+        <button type="button" style="background:none; border:none; cursor:pointer; font-size:16px; padding:6px 4px; min-width:32px; min-height:32px;" title="画像URLを直接入力" onclick="promptItemImage(${item.id})">🔗</button>
       </td>
-      <td><button type="button" style="background:#ef4444; color:#fff; border:none; border-radius:4px; padding:4px 6px; font-size:11px; cursor:pointer;" title="削除" onclick="deleteItemRow(${item.id})">🗑</button></td>
+      <td><button type="button" style="background:#ef4444; color:#fff; border:none; border-radius:4px; padding:6px 10px; min-height:32px; font-size:13px; cursor:pointer;" title="削除" onclick="deleteItemRow(${item.id})">🗑</button></td>
     </tr>
   `;
   }).join("");
@@ -1974,16 +1994,16 @@ function renderLayoutMasterEditor() {
     card.style.flex = `${sec.cols} 1 0%`;
     card.innerHTML = `
       <div class="fixture-edit-header">
-        <input class="ctrl-input" style="font-weight:bold; font-size:11px;" type="text" id="sec-name-${sIdx}" value="${sec.name}" onchange="markUnsaved()">
-        <select class="ctrl-select" style="font-size:10px; width:75px;" id="sec-cat-${sIdx}" onchange="changeSectionCat(${sIdx}, this.value)">
+        <input class="ctrl-input" style="font-weight:bold; min-width:0;" type="text" id="sec-name-${sIdx}" value="${sec.name}" onchange="markUnsaved()">
+        <select class="ctrl-select" style="width:112px; flex-shrink:0;" id="sec-cat-${sIdx}" onchange="changeSectionCat(${sIdx}, this.value)">
           <option value="中華まん" ${sec.category === '中華まん' ? 'selected' : ''}>中華まん</option>
           <option value="ホッターズ" ${sec.category === 'ホッターズ' ? 'selected' : ''}>ホッターズ</option>
           <option value="常温総菜" ${sec.category === '常温総菜' ? 'selected' : ''}>常温総菜</option>
         </select>
       </div>
       <div style="display:flex; gap:4px; margin-bottom:4px; font-size:10px;">
-        段:<input class="ctrl-input" style="width:30px; padding:1px;" type="number" id="sec-rows-${sIdx}" value="${sec.rows}" onchange="resizeFixture(${sIdx})">
-        列:<input class="ctrl-input" style="width:30px; padding:1px;" type="number" id="sec-cols-${sIdx}" value="${sec.cols}" onchange="resizeFixture(${sIdx})">
+        段:<input class="ctrl-input" style="width:42px; padding:4px 2px;" type="number" id="sec-rows-${sIdx}" value="${sec.rows}" onchange="resizeFixture(${sIdx})">
+        列:<input class="ctrl-input" style="width:42px; padding:4px 2px;" type="number" id="sec-cols-${sIdx}" value="${sec.cols}" onchange="resizeFixture(${sIdx})">
       </div>
       <div class="fixture-matrix-edit" style="grid-template-columns: repeat(${sec.cols}, 1fr);" id="sec-matrix-${sIdx}"></div>
     `;
@@ -1998,7 +2018,7 @@ function renderLayoutMasterEditor() {
       cellBox.className = "edit-cell-box";
       cellBox.innerHTML = `
         <img id="cell-img-${sIdx}-${cIdx}" src="${imgUrl}" style="width:100%; height:28px; object-fit:cover; border-radius:3px; margin-bottom:2px; ${imgUrl ? '' : 'display:none;'}" onerror="this.style.display='none';">
-        <select class="ctrl-select" style="font-size:9px; padding:1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved(); updateCellImagePreview(${sIdx}, ${cIdx});">${optHtml}</select>
+        <select class="ctrl-select" style="font-size:11px; padding:2px 1px;" id="cell-select-${sIdx}-${cIdx}" onchange="markUnsaved(); updateCellImagePreview(${sIdx}, ${cIdx});">${optHtml}</select>
       `;
       matrixEl.appendChild(cellBox);
     });
