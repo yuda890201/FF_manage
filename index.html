@@ -1699,8 +1699,20 @@ async function handleItemImageFileSelected(event) {
 function addNewItemRow() {
   syncItemMasterInputsToMemory();
   const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
-  ITEMS.push({ id: nextId, name: "新規商品", category: "ホッターズ", price: 0, limitHour: 0, imageUrl: "" });
+  // 分類の絞り込みが有効な場合、追加した商品がその絞り込みで見えなくなり
+  // 「何も起きていない」ように見えて再タップ→重複作成につながっていたため、
+  // 現在の絞り込みに一致する分類で追加する
+  const newCategory = (itemMasterFilters.category && itemMasterFilters.category !== "全て")
+    ? itemMasterFilters.category
+    : "ホッターズ";
+  ITEMS.push({ id: nextId, name: "新規商品", category: newCategory, price: 0, limitHour: 0, imageUrl: "" });
   markUnsaved();
+
+  // 商品名検索が残っていると「新規商品」が引き続き見えなくなる場合があるため解除する
+  itemMasterFilters.search = "";
+  const searchEl = document.getElementById("im-search");
+  if (searchEl) searchEl.value = "";
+
   renderItemMasterTable();
 }
 
