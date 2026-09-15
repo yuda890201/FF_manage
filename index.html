@@ -597,6 +597,7 @@
       <div class="master-title">📦 商品マスタ（全店共通）</div>
       <div style="display:flex; gap:8px;">
         <button class="btn-save-action" style="background:#3b82f6;" onclick="addNewItemRow()">＋ 商品追加</button>
+        <button class="btn-save-action" style="background:#8b5cf6;" onclick="triggerAiItemRegistration()">🤖 AIで登録</button>
         <button class="btn-save-action" style="background:#f59e0b;" onclick="mergeDuplicateItems()">🧹 重複を統合</button>
         <button class="btn-save-action" onclick="saveItemMaster()">💾 全店共通商品マスタを保存</button>
       </div>
@@ -699,11 +700,15 @@
 <!-- 商品マスタの画像アップロード用（非表示のファイル選択） -->
 <input type="file" id="itemImageFileInput" accept="image/*" style="display:none;" onchange="handleItemImageFileSelected(event)">
 
-<!-- Firebase (Firestore + Authentication + Storage) -->
+<!-- 商品マスタのAI自動登録用（非表示のファイル選択） -->
+<input type="file" id="aiItemPhotoInput" accept="image/*" style="display:none;" onchange="handleAiItemPhotoSelected(event)">
+
+<!-- Firebase (Firestore + Authentication + Storage + Functions) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
 <script>
 // =================================================================
 // 【Firebase設定】Firebaseコンソール「プロジェクトの設定」→「マイアプリ」の値を貼り付けてください。
@@ -720,11 +725,13 @@ const firebaseConfig = {
 let auth = null;
 let db = null;
 let storage = null;
+let cloudFunctions = null;
 try {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
   storage = firebase.storage();
+  cloudFunctions = firebase.functions('asia-northeast1'); // functions/index.js のregion指定と合わせる
 } catch (err) {
   console.error('Firebase初期化に失敗しました。firebaseConfigを確認してください。', err);
 }
@@ -1734,6 +1741,90 @@ function addNewItemRow() {
   if (searchEl) searchEl.value = "";
 
   renderItemMasterTable();
+}
+
+// 🤖 写真からAIが商品名・分類・価格・販売期限を読み取り、新規商品として登録する
+function triggerAiItemRegistration() {
+  if (!currentUser) return;
+  if (!cloudFunctions) {
+    alert("AI登録機能が利用できません(Cloud Functionsが未設定です)。管理者にお問い合わせください。");
+    return;
+  }
+  syncItemMasterInputsToMemory();
+  document.getElementById("aiItemPhotoInput").click();
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // data:image/jpeg;base64,xxxxx… の先頭部分を取り除き、base64本体だけを渡す
+      const base64 = String(reader.result).split(",")[1] || "";
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleAiItemPhotoSelected(event) {
+  const fileInput = event.target;
+  const file = fileInput.files && fileInput.files[0];
+  fileInput.value = ""; // 同じファイルを選び直せるようにリセット
+  if (!file) return;
+
+  showLockOverlay("AIが商品情報を解析中...", "写真から商品名・分類・価格などを読み取っています");
+  try {
+    const imageBase64 = await readFileAsBase64(file);
+    const mimeType = file.type || "image/jpeg";
+
+    const callAnalyze = cloudFunctions.httpsCallable("analyzeNewItemPhoto");
+    const result = await callAnalyze({ imageBase64, mimeType });
+    const info = result.data || {};
+
+    const nextId = ITEMS.reduce((max, i) => Math.max(max, i.id), 0) + 1;
+    const newItem = {
+      id: nextId,
+      name: info.name || "新規商品",
+      category: info.category || "ホッターズ",
+      price: info.price || 0,
+      limitHour: info.limitHour || 0,
+      imageUrl: ""
+    };
+    ITEMS.push(newItem);
+    markUnsaved();
+
+    // 同じ写真をそのまま商品画像としてもアップロードする(失敗しても商品登録自体は成立させる)
+    if (storage) {
+      try {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `itemImages/${nextId}_${Date.now()}.${ext}`;
+        const ref = storage.ref().child(path);
+        await ref.put(file);
+        newItem.imageUrl = await ref.getDownloadURL();
+      } catch (imgErr) {
+        console.error("AI登録時の画像アップロードに失敗:", imgErr);
+      }
+    }
+
+    itemMasterFilters.search = "";
+    itemMasterFilters.category = "全て";
+    const searchEl = document.getElementById("im-search");
+    if (searchEl) searchEl.value = "";
+    const catFilterEl = document.getElementById("im-cat-filter");
+    if (catFilterEl) catFilterEl.value = "全て";
+
+    renderItemMasterTable();
+    alert(
+      `AIが商品情報を読み取りました。内容を確認し、必要に応じて修正してから保存してください。\n\n` +
+      `商品名: ${newItem.name}\n分類: ${newItem.category}\n価格: ${newItem.price}円\n販売期限: ${newItem.limitHour}時間`
+    );
+  } catch (err) {
+    console.error("AI Item Registration Error:", err);
+    alert("AIによる商品情報の読み取りに失敗しました。\n" + (err && err.message ? err.message : "時間をおいて再度お試しください。"));
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 // storesConfig(什器配置・スケジュール設定)から指定した商品への参照を除去する（セルは「空き」に、スケジュール設定は削除）
