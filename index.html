@@ -904,7 +904,7 @@ async function loadInitialDataFromSpreadsheet() {
 async function handleManualBackup() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
-  saveCurrentViewInputs();
+  await saveCurrentViewInputs();
 
   showLockOverlay("バックアップ作成中...", "全店舗の安全なバックアップを作成しています");
   try {
@@ -1002,7 +1002,7 @@ async function saveSnapshotToCloud(showFeedback = false) {
 // 【最適化】変更がある時だけ自動保存する画面遷移
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
-  saveCurrentViewInputs();
+  await saveCurrentViewInputs();
 
   // ★設定に変更がある場合のみクラウド保存（変更がなければ通信ゼロで一瞬で切り替え）
   if (hasUnsavedChanges) {
@@ -1011,14 +1011,17 @@ async function switchViewWithSave(targetView) {
     hideLockOverlay();
   }
 
-  currentActiveView = targetView;
   switchView(targetView);
 }
 
-function saveCurrentViewInputs() {
-  if (currentActiveView === "scheduleMaster") saveScheduleMaster(false);
-  else if (currentActiveView === "itemMaster") saveItemMaster(false);
-  else if (currentActiveView === "storeMaster") saveStoreMaster(false);
+// 画面を離れる前に、その画面の入力内容を保存する。
+// 各保存関数には showFeedback=false を渡し、確認ダイアログや画面遷移を伴わない
+// 「裏側での保存」として実行する(操作の途中でホーム画面へ飛ばされないようにするため)
+async function saveCurrentViewInputs() {
+  if (currentActiveView === "scheduleMaster") await saveScheduleMaster(false);
+  else if (currentActiveView === "itemMaster") await saveItemMaster(false);
+  else if (currentActiveView === "storeMaster") await saveStoreMaster(false);
+  else if (currentActiveView === "layoutMaster") await saveLayoutMaster(false);
 }
 
 function applyCurrentStoreData() {
@@ -1118,6 +1121,9 @@ function switchView(viewName) {
 
   const target = viewMap[viewName];
   if (target) {
+    // 表示中の画面の記録はこの関数に一本化する。別経路でswitchViewが呼ばれたときに
+    // currentActiveViewが実際の表示とずれると、タブを押しても切り替わらなくなるため
+    currentActiveView = viewName;
     document.querySelectorAll(".nav-tab")[target.idx].classList.add("active");
     document.getElementById(target.id).classList.add("active");
     if (viewName === 'record') {
@@ -1505,7 +1511,7 @@ async function migrateRenamedStoreConfigs(renamed) {
   }
 }
 
-async function saveStoreMaster() {
+async function saveStoreMaster(showFeedback = true) {
   // 選択中の店舗ID自体をこの画面で編集した場合、ラジオボタンのvalue(編集前のID)を
   // そのまま使うと編集後のIDと一致せず選択が外れてしまうため、値ではなく行番号で
   // 選択店舗を特定し、更新後のIDを参照する
@@ -1533,14 +1539,13 @@ async function saveStoreMaster() {
   localStorage.setItem('ffmanage_current_store_id', currentStoreId);
 
   if (renamed.length > 0) {
-    showLockOverlay("店舗IDの変更を反映中...", "変更前のIDのデータを新しいIDへ引き継いでいます");
+    if (showFeedback) showLockOverlay("店舗IDの変更を反映中...", "変更前のIDのデータを新しいIDへ引き継いでいます");
     await migrateRenamedStoreConfigs(renamed);
-    hideLockOverlay();
+    if (showFeedback) hideLockOverlay();
   }
 
   applyCurrentStoreData();
-  await saveStoreConfigToCloud(true);
-  switchView('home');
+  await saveStoreConfigToCloud(showFeedback);
 }
 
 // 🔁 店舗ID変更時に引き継がれなかったデータを、変更前のIDから復旧する
@@ -2132,17 +2137,20 @@ async function deleteItemRow(id) {
   }
 }
 
-async function saveItemMaster() {
+async function saveItemMaster(showFeedback = true) {
   syncItemMasterInputsToMemory();
 
   const dupNames = findDuplicateItemNames();
   if (dupNames.length > 0) {
+    // 画面切り替え時の自動保存では操作を止めないよう、警告は出さず保存だけ見送る
+    // (入力内容はメモリに残っているので、あとで「保存」ボタンを押せば警告が出る)
+    if (!showFeedback) return;
     renderItemMasterTable();
     alert(`商品名が重複しています: ${dupNames.join("、")}\n名前を変更するか、「🧹 重複を統合」ボタンで統合してから保存してください。`);
     return;
   }
 
-  await saveStoreConfigToCloud(true);
+  await saveStoreConfigToCloud(showFeedback);
 }
 
 // storesConfig(什器配置・スケジュール設定)内の商品ID参照を idMap = { 旧ID: 新ID } に従って付け替える
@@ -2268,7 +2276,7 @@ function renderScheduleMasterTable() {
   }).join("");
 }
 
-async function saveScheduleMaster() {
+async function saveScheduleMaster(showFeedback = true) {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const conf = getActiveStoreConfig();
 
@@ -2298,7 +2306,7 @@ async function saveScheduleMaster() {
     }
   });
 
-  await saveStoreConfigToCloud(true);
+  await saveStoreConfigToCloud(showFeedback);
 }
 
 function renderLayoutMasterEditor() {
@@ -2380,7 +2388,7 @@ function resizeFixture(sIdx) {
   renderLayoutMasterEditor();
 }
 
-async function saveLayoutMaster() {
+async function saveLayoutMaster(showFeedback = true) {
   const conf = getActiveStoreConfig();
   conf.fixtures.forEach((sec, sIdx) => {
     const nEl = document.getElementById(`sec-name-${sIdx}`);
@@ -2392,8 +2400,7 @@ async function saveLayoutMaster() {
       if (sel) cell.itemId = parseInt(sel.value);
     });
   });
-  await saveStoreConfigToCloud(true);
-  switchView('home');
+  await saveStoreConfigToCloud(showFeedback);
 }
 
 function printPlanSheets() {
