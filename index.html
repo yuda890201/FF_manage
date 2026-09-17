@@ -587,6 +587,18 @@
         <textarea class="ctrl-input" id="legacyRestoreJsonInput" style="width:100%; height:140px; font-family:monospace; font-size:14px; resize:vertical;" placeholder="ここに旧バックアップのJSONを貼り付け"></textarea>
         <button class="btn-save-action" style="background:#f59e0b; margin-top:6px; width:100%;" onclick="runLegacyRestore()">この内容で復元する</button>
       </div>
+
+      <button class="btn-save-action" style="background:#0ea5e9; width:100%; margin-top:6px;" onclick="toggleStoreMigratePanel()">🔁 変更前の店舗IDからデータを復旧</button>
+      <div id="storeMigratePanel" style="display:none; margin-top:8px;">
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px; line-height:1.5;">
+          店舗IDを変更したあとに什器配置・スケジュール設定が初期状態に戻ってしまった場合、変更前の店舗IDを指定してデータを復旧します。変更前のデータはクラウドに残っているため、多くの場合そのまま取り戻せます。
+        </div>
+        <button class="btn-save-action" style="background:#334155; width:100%; margin-bottom:6px;" onclick="scanRecoverableStoreData()">🔍 復旧できるデータを探す</button>
+        <div id="storeMigrateScanResult" style="font-size:11px; color:#cbd5e1; margin-bottom:6px; white-space:pre-wrap; line-height:1.5;"></div>
+        <input class="ctrl-input" type="text" id="storeMigrateSourceId" placeholder="復旧元の店舗ID（例: S001）" style="width:100%; margin-bottom:6px;">
+        <select class="ctrl-select" id="storeMigrateTargetSelect" style="margin-bottom:6px;"></select>
+        <button class="btn-save-action" style="background:#f59e0b; width:100%;" onclick="runStoreDataMigration()">この内容で復旧する</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1474,6 +1486,25 @@ async function deleteStoreRow(idx) {
   }
 }
 
+// 店舗IDを変更した場合、什器配置・スケジュール設定は変更前のIDのドキュメントに入ったままなので
+// 新しいIDへコピーする。変更前のドキュメントは復旧用にあえて残す(削除しない)
+async function migrateRenamedStoreConfigs(renamed) {
+  for (const { oldId, newId } of renamed) {
+    try {
+      let conf = STORES_CONFIG[newId];
+      if (!conf) {
+        const doc = await db.collection('storesConfig').doc(oldId).get();
+        if (!doc.exists) continue;
+        conf = doc.data();
+        STORES_CONFIG[newId] = conf;
+      }
+      await db.collection('storesConfig').doc(newId).set(conf);
+    } catch (err) {
+      console.error(`店舗ID変更時のデータ引き継ぎに失敗しました (${oldId} → ${newId}):`, err);
+    }
+  }
+}
+
 async function saveStoreMaster() {
   // 選択中の店舗ID自体をこの画面で編集した場合、ラジオボタンのvalue(編集前のID)を
   // そのまま使うと編集後のIDと一致せず選択が外れてしまうため、値ではなく行番号で
@@ -1481,16 +1512,139 @@ async function saveStoreMaster() {
   const radios = Array.from(document.querySelectorAll('input[name="currentStoreRadio"]'));
   const selectedIdx = Math.max(0, radios.findIndex(r => r.checked));
 
+  // 店舗IDの変更を検出するため、入力を反映する前のIDを控えておく
+  const prevIds = STORE_MASTER.map(s => s.id);
   syncStoreMasterInputsToMemory();
+
+  const renamed = [];
+  STORE_MASTER.forEach((store, idx) => {
+    const oldId = prevIds[idx];
+    if (!oldId || oldId === store.id) return;
+    if (STORES_CONFIG[oldId]) {
+      STORES_CONFIG[store.id] = STORES_CONFIG[oldId];
+      delete STORES_CONFIG[oldId];
+    }
+    renamed.push({ oldId, newId: store.id });
+  });
 
   // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
   // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
   currentStoreId = (STORE_MASTER[selectedIdx] || STORE_MASTER[0]).id;
   localStorage.setItem('ffmanage_current_store_id', currentStoreId);
 
+  if (renamed.length > 0) {
+    showLockOverlay("店舗IDの変更を反映中...", "変更前のIDのデータを新しいIDへ引き継いでいます");
+    await migrateRenamedStoreConfigs(renamed);
+    hideLockOverlay();
+  }
+
   applyCurrentStoreData();
   await saveStoreConfigToCloud(true);
   switchView('home');
+}
+
+// 🔁 店舗ID変更時に引き継がれなかったデータを、変更前のIDから復旧する
+function toggleStoreMigratePanel() {
+  const panel = document.getElementById("storeMigratePanel");
+  const willShow = panel.style.display === "none";
+  panel.style.display = willShow ? "block" : "none";
+  if (willShow) {
+    const sel = document.getElementById("storeMigrateTargetSelect");
+    sel.innerHTML = STORE_MASTER.map(s => `<option value="${s.id}">${s.name}（ID:${s.id}）</option>`).join("");
+  }
+}
+
+// クラウドに残っているデータの店舗IDを一覧表示する(どのIDから復旧できるかを確認するため)
+async function scanRecoverableStoreData() {
+  if (!currentUser) return;
+  const resultEl = document.getElementById("storeMigrateScanResult");
+  resultEl.innerText = "検索中...";
+  try {
+    const [configSnap, backupSnap] = await Promise.all([
+      db.collection('storesConfig').get(),
+      db.collection('manualBackups').get()
+    ]);
+    const configIds = configSnap.docs.map(d => d.id);
+    const backupIds = backupSnap.docs.map(d => d.id);
+    resultEl.innerText =
+      `【設定データが残っている店舗ID】\n${configIds.length ? configIds.join("、 ") : "なし"}\n\n` +
+      `【手動バックアップが残っている店舗ID】\n${backupIds.length ? backupIds.join("、 ") : "なし"}`;
+  } catch (err) {
+    console.error("Recoverable Data Scan Error:", err);
+    resultEl.innerText = "検索に失敗しました。通信状態を確認してもう一度お試しください。";
+  }
+}
+
+async function runStoreDataMigration() {
+  if (!currentUser) return;
+  const sourceId = document.getElementById("storeMigrateSourceId").value.trim();
+  const targetId = document.getElementById("storeMigrateTargetSelect").value;
+  const targetStore = STORE_MASTER.find(s => s.id === targetId);
+
+  if (!sourceId) {
+    alert("復旧元の店舗IDを入力してください。");
+    return;
+  }
+  if (!targetStore) {
+    alert("復旧先の店舗を選択してください。");
+    return;
+  }
+  if (sourceId === targetId) {
+    alert("復旧元と復旧先が同じ店舗IDです。");
+    return;
+  }
+
+  showLockOverlay("データを検索中...", `店舗ID「${sourceId}」のデータを探しています`);
+  let conf = null;
+  let foundIn = "";
+  try {
+    const configDoc = await db.collection('storesConfig').doc(sourceId).get();
+    if (configDoc.exists) {
+      conf = configDoc.data();
+      foundIn = "設定データ";
+    } else {
+      const backupDoc = await db.collection('manualBackups').doc(sourceId).get();
+      if (backupDoc.exists && backupDoc.data().storeConfig) {
+        conf = backupDoc.data().storeConfig;
+        foundIn = "手動バックアップ";
+      }
+    }
+  } catch (err) {
+    console.error("Store Migration Fetch Error:", err);
+    hideLockOverlay();
+    alert("データの検索に失敗しました。通信状態を確認してもう一度お試しください。");
+    return;
+  }
+  hideLockOverlay();
+
+  if (!conf) {
+    alert(`店舗ID「${sourceId}」のデータは見つかりませんでした。\n「🔍 復旧できるデータを探す」で、残っている店舗IDを確認してください。`);
+    return;
+  }
+
+  const ok = confirm(
+    `${foundIn}から、店舗ID「${sourceId}」のデータが見つかりました。\n\n` +
+    `この内容を【${targetStore.name}】(ID:${targetId})に復旧します。\n` +
+    `復旧先の現在の什器配置・スケジュール設定は上書きされます。よろしいですか？`
+  );
+  if (!ok) return;
+
+  showLockOverlay("データを復旧中...", `【${targetStore.name}】に復元しています`);
+  try {
+    STORES_CONFIG[targetId] = {
+      fixtures: JSON.parse(JSON.stringify(conf.fixtures || DEFAULT_FIXTURES)),
+      schedule: JSON.parse(JSON.stringify(conf.schedule || DEFAULT_SCHEDULE)),
+      timeSlots: JSON.parse(JSON.stringify(conf.timeSlots || DEFAULT_TIME_SLOTS))
+    };
+    await db.collection('storesConfig').doc(targetId).set(STORES_CONFIG[targetId]);
+    if (currentStoreId === targetId) applyCurrentStoreData();
+    alert(`【${targetStore.name}】に店舗ID「${sourceId}」のデータを復旧しました。`);
+  } catch (err) {
+    console.error("Store Migration Save Error:", err);
+    alert("復旧内容の保存に失敗しました。通信状態を確認してもう一度お試しください。");
+  } finally {
+    hideLockOverlay();
+  }
 }
 
 // 🗂 旧バックアップ(GAS/スプレッドシート版)JSONからの復元
