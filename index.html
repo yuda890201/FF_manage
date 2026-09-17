@@ -1310,24 +1310,44 @@ function confirmWaste() {
 
 // 商品名がタイルに収まらない場合は、文字サイズを少しずつ下げて調整する。
 // 以前は横方向にscaleで圧縮していたため、幅の狭いタイルで文字が判読不能になっていた。
+// 商品名の文字サイズはタイルごとに決める。什器の幅はどれもほぼ同じだが高さは段数で
+// 大きく変わるため(段数の多い中華まんは低く、ホッターズは倍以上高い)、一律にすると
+// 低いタイルに合わせた分だけ高いタイルが無駄に小さくなる。
+// 各タイルで「商品名の下端が個数バッジに触れない」範囲の最大サイズを選ぶ。
+// 高さに余裕があるタイルでは折り返してでも大きな文字を使う。
+const ITEM_TITLE_MIN_PX = 13;
+const ITEM_TITLE_MAX_PX = 22;
+
 function autoFitTitles() {
   document.querySelectorAll('.item-title-large').forEach(title => {
-    title.style.fontSize = '';
     const wrapper = title.parentElement;
-    if (!wrapper || !wrapper.clientWidth) return;
-    let size = parseFloat(getComputedStyle(title).fontSize);
-    // 1行に収まるまで少しずつ縮める(下限13px)。折り返すと下に伸びて、
-    // 境目に浮かせた個数バッジと重なってしまうため。13pxでも収まらない
-    // 長い名前は2行になるが、その高さなら重ならない。
-    // 行数は要素の高さと行送りの比で判定する(ブロック要素では行ごとの矩形が取れないため)
-    const isTooTall = () => {
-      const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || size * 1.15;
-      return title.offsetHeight > lineHeight * 1.4;
-    };
-    while (size > 13 && isTooTall()) {
-      size -= 1;
-      title.style.fontSize = `${size}px`;
+    const capsule = title.closest('.cell-capsule');
+    if (!wrapper || !wrapper.clientWidth || !capsule) return;
+
+    const badge = capsule.querySelector('.stock-box');
+    if (!badge) return;
+
+    // 商品名に使える縦幅。バッジは位置が固定なので、文字サイズを変えても変動しない
+    const available = badge.getBoundingClientRect().top - wrapper.getBoundingClientRect().top - 2;
+    if (available <= 0) {
+      title.style.fontSize = `${ITEM_TITLE_MIN_PX}px`;
+      return;
     }
+
+    let lo = ITEM_TITLE_MIN_PX;
+    let hi = ITEM_TITLE_MAX_PX;
+    let best = ITEM_TITLE_MIN_PX;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      title.style.fontSize = `${mid}px`;
+      if (title.offsetHeight <= available) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    title.style.fontSize = `${best}px`;
   });
 }
 
