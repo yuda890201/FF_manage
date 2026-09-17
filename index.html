@@ -645,7 +645,7 @@
       <div class="master-title" id="scheduleStoreTitle">⏰ スケジュール目標（店舗別設定）</div>
       <div style="display:flex; gap:8px; align-items:center;">
         <button class="btn-save-action" style="background:#0284c7;" onclick="printPlanSheets()">🖨️ 紙の什器陳列表を印刷 (A4 3枚)</button>
-        <select id="scheduleDaySelect" class="ctrl-select" style="width:110px;" onchange="renderScheduleMasterTable()">
+        <select id="scheduleDaySelect" class="ctrl-select" style="width:110px;" onchange="onScheduleDayChange()">
           <option value="weekday">平日 (月〜金)</option>
           <option value="saturday">土曜</option>
           <option value="sunday">日祝</option>
@@ -653,7 +653,7 @@
         <button class="btn-save-action" onclick="saveScheduleMaster()">💾 この店舗のスケジュールを保存</button>
       </div>
     </div>
-    <div style="display:flex; gap:8px; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; background:#0f172a; padding:6px; border-radius:6px; border:1px solid #334155; flex-shrink:0;">
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
         <span>朝:</span><input class="ctrl-input" style="width:60px;" id="slot-morning-start" value="06:00" onchange="markUnsaved()">〜
       </div>
@@ -662,6 +662,16 @@
       </div>
       <div style="display:flex; align-items:center; gap:4px; font-size:11px;">
         <span>夕・夜:</span><input class="ctrl-input" style="width:60px;" id="slot-evening-start" value="16:00" onchange="markUnsaved()">〜
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; font-size:11px; margin-left:auto;">
+        <span>コピー先:</span>
+        <select class="ctrl-select" id="scheduleCopyTarget" style="width:110px;">
+          <option value="weekend">土曜と日祝</option>
+          <option value="weekday">平日 (月〜金)</option>
+          <option value="saturday">土曜</option>
+          <option value="sunday">日祝</option>
+        </select>
+        <button class="btn-save-action" style="background:#8b5cf6; min-height:32px; padding:4px 10px; font-size:12px;" onclick="copyScheduleToOtherDays()">📋 表示中の曜日をコピー</button>
       </div>
     </div>
     <div class="table-scroll">
@@ -808,6 +818,7 @@ let currentDayType = "weekday";
 let activeWasteTarget = null;
 let hasUnsavedChanges = false; // 未保存フラグ
 let currentActiveView = "home";
+let scheduleDisplayedDay = "weekday"; // スケジュール画面に現在表示している曜日
 
 function getCurrentStore() {
   return STORE_MASTER.find(s => s.id === currentStoreId)
@@ -2256,11 +2267,14 @@ async function mergeDuplicateItems() {
   }
 }
 
+const SCHEDULE_DAY_LABELS = { weekday: "平日 (月〜金)", saturday: "土曜", sunday: "日祝" };
+
 function renderScheduleMasterTable() {
   const dayType = document.getElementById("scheduleDaySelect").value;
   const tbody = document.getElementById("scheduleMasterBody");
   const conf = getActiveStoreConfig();
   const targetMap = conf.schedule[dayType] || conf.schedule.weekday;
+  scheduleDisplayedDay = dayType;
 
   tbody.innerHTML = ITEMS.filter(i => i.id !== 0).map(item => {
     const t = targetMap[item.id] || { morning: 0, lunch: 0, evening: 0, minQty: 0 };
@@ -2276,8 +2290,13 @@ function renderScheduleMasterTable() {
   }).join("");
 }
 
-async function saveScheduleMaster(showFeedback = true) {
-  const dayType = document.getElementById("scheduleDaySelect").value;
+// 画面に表示中の曜日の入力欄をメモリへ反映する（保存はしない）。
+// 曜日の切り替えやコピーの前に必ず呼び、未保存の入力を失わないようにする。
+// 書き込み先は「selectの現在値」ではなく scheduleDisplayedDay を使う。
+// selectのonchangeは値が変わった後に発火するため、selectを読むと
+// 直前に入力していた内容を切り替え先の曜日へ書き込んでしまうため。
+function syncScheduleInputsToMemory() {
+  const dayType = scheduleDisplayedDay;
   const conf = getActiveStoreConfig();
 
   const smEl = document.getElementById("slot-morning-start");
@@ -2305,7 +2324,49 @@ async function saveScheduleMaster(showFeedback = true) {
       };
     }
   });
+}
 
+function onScheduleDayChange() {
+  syncScheduleInputsToMemory();
+  renderScheduleMasterTable();
+}
+
+// 📋 表示中の曜日の内容を、他の曜日へコピーする（平日を入力して土日に流用する用途）
+function copyScheduleToOtherDays() {
+  const sourceDay = scheduleDisplayedDay;
+  const targetValue = document.getElementById("scheduleCopyTarget").value;
+  const targets = (targetValue === "weekend" ? ["saturday", "sunday"] : [targetValue])
+    .filter(d => d !== sourceDay);
+
+  if (targets.length === 0) {
+    alert("コピー元とコピー先が同じ曜日です。コピー先を変更してください。");
+    return;
+  }
+
+  // 入力したばかりの値を確実に含めるため、先に画面の内容をメモリへ反映する
+  syncScheduleInputsToMemory();
+
+  const conf = getActiveStoreConfig();
+  const sourceLabel = SCHEDULE_DAY_LABELS[sourceDay];
+  const targetLabel = targets.map(d => SCHEDULE_DAY_LABELS[d]).join("・");
+
+  const ok = confirm(
+    `【${sourceLabel}】の内容を【${targetLabel}】にコピーします。\n` +
+    `コピー先の現在の設定は上書きされます。よろしいですか？`
+  );
+  if (!ok) return;
+
+  targets.forEach(d => {
+    conf.schedule[d] = JSON.parse(JSON.stringify(conf.schedule[sourceDay] || {}));
+  });
+  markUnsaved();
+  renderScheduleMasterTable();
+
+  alert(`【${sourceLabel}】の内容を【${targetLabel}】にコピーしました。\n内容を確認して「💾 保存」してください。`);
+}
+
+async function saveScheduleMaster(showFeedback = true) {
+  syncScheduleInputsToMemory();
   await saveStoreConfigToCloud(showFeedback);
 }
 
