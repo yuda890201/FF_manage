@@ -294,6 +294,9 @@
     flex: 1;
     min-height: 0;
     height: 100%;
+    /* 段数の多い什器でもタイルを最低限の高さより小さくしない。
+       収まらない場合はこの什器だけ縦スクロールさせ、文字が潰れるのを防ぐ */
+    overflow-y: auto;
   }
   .cell-capsule {
     background: #0f172a;
@@ -325,31 +328,55 @@
   }
   .btn-top-cook {
     flex: 1.35;
+    justify-content: flex-start;
     background: linear-gradient(180deg, var(--btn-cook-top) 0%, var(--btn-cook-bottom) 100%);
     box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 0.5), 0 3px 0 var(--btn-cook-shadow);
     border-top: 1px solid var(--btn-cook-bevel);
   }
   .btn-top-cook:active { transform: translateY(2px); }
   .btn-bottom-sell {
-    flex: 0.65;
+    flex: 0.55;
+    justify-content: flex-end;
     background: linear-gradient(180deg, var(--btn-sell-top) 0%, var(--btn-sell-bottom) 100%);
     box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 0.2), 0 3px 0 var(--btn-sell-shadow);
     border-top: 1px solid var(--btn-sell-bevel);
   }
   .btn-bottom-sell:active { transform: translateY(2px); background: #991b1b; }
 
-  .action-top-label { font-size: 8px; font-weight: 900; color: #93c5fd; text-align: center; }
-  .item-title-wrapper { width: 100%; display: flex; justify-content: center; align-items: center; margin: 1px 0; overflow: hidden; }
-  .item-title-large { font-size: 14px; font-weight: 900; white-space: nowrap; text-align: center; color: #fff; line-height: 1.1; }
-  .stock-box { display: flex; justify-content: center; align-items: baseline; gap: 3px; }
-  .stock-val { font-size: 20px; font-weight: 900; color: #fff; }
-  .stock-unit { font-size: 9px; font-weight: bold; color: #bfdbfe; }
-  .rec-inline { font-size: 10px; font-weight: 900; color: #fca5a5; background: rgba(185, 28, 28, 0.85); padding: 0 4px; border-radius: 3px; border: 1px solid #ef4444; display: none; }
-  .boundary-stat-top { font-size: 8px; color: #bfdbfe; font-weight: bold; text-align: right; }
-  .boundary-stat-bottom { font-size: 8px; color: #cbd5e1; font-weight: bold; text-align: right; }
-  .action-bottom-label { font-size: 8px; font-weight: 900; color: #fca5a5; text-align: center; }
+  .action-top-label { font-size: 11px; font-weight: 900; color: #93c5fd; text-align: center; flex-shrink: 0; }
+  /* 商品名は絶対に切らさない。段数の多い什器ではタイルが低くなるため、
+     flex-shrink:0 で縦につぶれるのを防ぎ、収まらない長い名前は折り返す */
+  .item-title-wrapper { width: 100%; display: flex; justify-content: center; align-items: center; margin: 2px 0; flex-shrink: 0; }
+  .item-title-large { font-size: 17px; font-weight: 900; white-space: normal; overflow-wrap: anywhere; text-align: center; color: #fff; line-height: 1.15; }
+  /* 現在個数は調理ボタンと販売ボタンの境目にまたぐ形で浮かせる。
+     pointer-events:none にして、タップは下のボタンへそのまま通す */
+  .stock-box {
+    position: absolute;
+    left: 50%;
+    top: 64%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1px 10px;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.88);
+    border: 1.5px solid rgba(148, 163, 184, 0.6);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .stock-limits { font-size: 10px; font-weight: bold; color: #bfdbfe; white-space: nowrap; line-height: 1.15; }
+  .stock-limits span { font-size: 12px; color: #fff; }
+  .stock-main { display: flex; align-items: baseline; gap: 4px; }
+  .stock-val { font-size: 25px; font-weight: 900; color: #fff; line-height: 1.1; }
+  .stock-unit { font-size: 11px; font-weight: bold; color: #bfdbfe; }
+  .rec-inline { font-size: 13px; font-weight: 900; color: #fee2e2; background: rgba(185, 28, 28, 0.95); padding: 1px 6px; border-radius: 4px; border: 1px solid #ef4444; display: none; }
+  .action-bottom-label { font-size: 11px; font-weight: 900; color: #fca5a5; text-align: center; flex-shrink: 0; }
 
-  .badge-toast { position: absolute; right: 4px; top: 14px; padding: 1px 5px; border-radius: 8px; font-size: 8px; font-weight: 900; color: #fff; display: none; z-index: 10; }
+  /* 商品名に被らないよう、タイル上端の隅に表示する */
+  .badge-toast { position: absolute; right: 4px; top: 2px; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: 900; color: #fff; display: none; z-index: 10; }
   .toast-cook { background: #10b981; }
   .toast-sell { background: #f59e0b; top: auto; bottom: 12px; }
 
@@ -1234,13 +1261,26 @@ function confirmWaste() {
   closeWasteModal();
 }
 
+// 商品名がタイルに収まらない場合は、文字サイズを少しずつ下げて調整する。
+// 以前は横方向にscaleで圧縮していたため、幅の狭いタイルで文字が判読不能になっていた。
 function autoFitTitles() {
-  document.querySelectorAll('.item-title-wrapper').forEach(wrapper => {
-    const title = wrapper.querySelector('.item-title-large');
-    if (!title) return;
-    title.style.transform = 'none';
-    const scale = wrapper.clientWidth / title.scrollWidth;
-    if (scale < 1) title.style.transform = `scale(${Math.max(scale, 0.6)})`;
+  document.querySelectorAll('.item-title-large').forEach(title => {
+    title.style.fontSize = '';
+    const wrapper = title.parentElement;
+    if (!wrapper || !wrapper.clientWidth) return;
+    let size = parseFloat(getComputedStyle(title).fontSize);
+    // 1行に収まるまで少しずつ縮める(下限13px)。折り返すと下に伸びて、
+    // 境目に浮かせた個数バッジと重なってしまうため。13pxでも収まらない
+    // 長い名前は2行になるが、その高さなら重ならない。
+    // 行数は要素の高さと行送りの比で判定する(ブロック要素では行ごとの矩形が取れないため)
+    const isTooTall = () => {
+      const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || size * 1.15;
+      return title.offsetHeight > lineHeight * 1.4;
+    };
+    while (size > 13 && isTooTall()) {
+      size -= 1;
+      title.style.fontSize = `${size}px`;
+    }
   });
 }
 
@@ -1256,7 +1296,7 @@ function renderHomeFixtures() {
     secBox.style.flex = `${sec.cols} 1 0%`;
 
     secBox.innerHTML = `
-      <div class="fixture-grid" style="grid-template-columns: repeat(${sec.cols}, 1fr); grid-template-rows: repeat(${sec.rows}, 1fr);" id="fgrid-${sIdx}"></div>
+      <div class="fixture-grid" style="grid-template-columns: repeat(${sec.cols}, 1fr); grid-template-rows: repeat(${sec.rows}, minmax(122px, 1fr));" id="fgrid-${sIdx}"></div>
     `;
     container.appendChild(secBox);
 
@@ -1280,19 +1320,21 @@ function renderHomeFixtures() {
         <div class="capsule-btn btn-top-cook" onclick="handleTouch('${cellKey}', 'cook')">
           <div class="action-top-label">▲ ＋調理</div>
           <div class="item-title-wrapper"><div class="item-title-large">${item.name}</div></div>
-          <div class="stock-box">
-            <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
-            <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
-            <span class="rec-inline" id="rec-${cellKey}" style="display: ${showRecommend ? 'inline-block' : 'none'};">+${recommendQty}</span>
-          </div>
-          <div class="boundary-stat-top">最高: <span>${cell.itemId === 0 ? '-' : maxQty}</span></div>
           <div class="badge-toast toast-cook" id="cook-badge-${cellKey}"></div>
         </div>
 
         <div class="capsule-btn btn-bottom-sell" onclick="handleTouch('${cellKey}', 'sell')">
-          <div class="boundary-stat-bottom">最低: <span>${cell.itemId === 0 ? '-' : minQty}</span></div>
           <div class="action-bottom-label">▼ −販売</div>
           <div class="badge-toast toast-sell" id="sell-badge-${cellKey}"></div>
+        </div>
+
+        <div class="stock-box">
+          <div class="stock-limits">最高 <span>${cell.itemId === 0 ? '-' : maxQty}</span> ／ 最低 <span>${cell.itemId === 0 ? '-' : minQty}</span></div>
+          <div class="stock-main">
+            <span class="stock-val">${cell.itemId === 0 ? '-' : cell.stock}</span>
+            <span class="stock-unit">${cell.itemId === 0 ? '' : '個'}</span>
+            <span class="rec-inline" id="rec-${cellKey}" style="display: ${showRecommend ? 'inline-block' : 'none'};">+${recommendQty}</span>
+          </div>
         </div>
       `;
       gridEl.appendChild(capsule);
