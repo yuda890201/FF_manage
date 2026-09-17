@@ -73,6 +73,14 @@
     gap: 6px;
     height: 32px;
   }
+  .header-left-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  /* 店舗名が長い場合はこの中だけ横スクロールさせる。
+     メニューはこの外に置き、開いたパネルが切り取られないようにしている */
   .header-left {
     display: flex;
     align-items: center;
@@ -102,6 +110,38 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
+
+  /* 普段使わないバックアップ・ログアウトは畳んでおき、ヘッダーを圧迫しないようにする */
+  .header-menu { position: relative; flex-shrink: 0; }
+  .header-menu-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 230px;
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.7);
+    padding: 6px;
+    z-index: 200;
+  }
+  .header-menu-panel button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: #e2e8f0;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .header-menu-panel button:hover { background: #1e293b; }
+  .header-menu-panel button:active { background: #334155; }
 
   .btn-global-backup {
     background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
@@ -515,12 +555,19 @@
 
 <header>
   <div class="header-row-top">
-    <div class="header-left">
-      <div class="app-title-tag">FF管理</div>
-      <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
-      <button class="btn-global-backup" onclick="handleManualBackup()">📦 バックアップ作成（全店舗）</button>
-      <button class="btn-global-restore" onclick="handleManualRestore()">🔄 バックアップ復元（この店舗）</button>
-      <button class="btn-global-restore" onclick="signOutUser()">ログアウト</button>
+    <div class="header-left-group">
+      <div class="header-left">
+        <div class="app-title-tag">FF管理</div>
+        <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
+      </div>
+      <div class="header-menu">
+        <button class="btn-global-restore" onclick="toggleHeaderMenu(event)">⋯ メニュー</button>
+        <div class="header-menu-panel" id="headerMenuPanel">
+          <button onclick="runHeaderMenuAction(handleManualBackup)">📦 バックアップ作成（全店舗）</button>
+          <button onclick="runHeaderMenuAction(handleManualRestore)">🔄 バックアップ復元（この店舗）</button>
+          <button onclick="runHeaderMenuAction(signOutUser)">🚪 ログアウト</button>
+        </div>
+      </div>
     </div>
     <div class="header-right">
       <div id="dayBadge" class="day-badge weekday">平日</div>
@@ -1263,24 +1310,44 @@ function confirmWaste() {
 
 // 商品名がタイルに収まらない場合は、文字サイズを少しずつ下げて調整する。
 // 以前は横方向にscaleで圧縮していたため、幅の狭いタイルで文字が判読不能になっていた。
+// 商品名の文字サイズはタイルごとに決める。什器の幅はどれもほぼ同じだが高さは段数で
+// 大きく変わるため(段数の多い中華まんは低く、ホッターズは倍以上高い)、一律にすると
+// 低いタイルに合わせた分だけ高いタイルが無駄に小さくなる。
+// 各タイルで「商品名の下端が個数バッジに触れない」範囲の最大サイズを選ぶ。
+// 高さに余裕があるタイルでは折り返してでも大きな文字を使う。
+const ITEM_TITLE_MIN_PX = 13;
+const ITEM_TITLE_MAX_PX = 22;
+
 function autoFitTitles() {
   document.querySelectorAll('.item-title-large').forEach(title => {
-    title.style.fontSize = '';
     const wrapper = title.parentElement;
-    if (!wrapper || !wrapper.clientWidth) return;
-    let size = parseFloat(getComputedStyle(title).fontSize);
-    // 1行に収まるまで少しずつ縮める(下限13px)。折り返すと下に伸びて、
-    // 境目に浮かせた個数バッジと重なってしまうため。13pxでも収まらない
-    // 長い名前は2行になるが、その高さなら重ならない。
-    // 行数は要素の高さと行送りの比で判定する(ブロック要素では行ごとの矩形が取れないため)
-    const isTooTall = () => {
-      const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || size * 1.15;
-      return title.offsetHeight > lineHeight * 1.4;
-    };
-    while (size > 13 && isTooTall()) {
-      size -= 1;
-      title.style.fontSize = `${size}px`;
+    const capsule = title.closest('.cell-capsule');
+    if (!wrapper || !wrapper.clientWidth || !capsule) return;
+
+    const badge = capsule.querySelector('.stock-box');
+    if (!badge) return;
+
+    // 商品名に使える縦幅。バッジは位置が固定なので、文字サイズを変えても変動しない
+    const available = badge.getBoundingClientRect().top - wrapper.getBoundingClientRect().top - 2;
+    if (available <= 0) {
+      title.style.fontSize = `${ITEM_TITLE_MIN_PX}px`;
+      return;
     }
+
+    let lo = ITEM_TITLE_MIN_PX;
+    let hi = ITEM_TITLE_MAX_PX;
+    let best = ITEM_TITLE_MIN_PX;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      title.style.fontSize = `${mid}px`;
+      if (title.offsetHeight <= available) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    title.style.fontSize = `${best}px`;
   });
 }
 
@@ -2722,6 +2789,25 @@ updateClock();
 function signOutUser() {
   auth.signOut();
 }
+
+// ヘッダーの「⋯ メニュー」。画面のどこかをタップすると閉じる
+function toggleHeaderMenu(event) {
+  event.stopPropagation();
+  const panel = document.getElementById("headerMenuPanel");
+  panel.style.display = panel.style.display === "block" ? "none" : "block";
+}
+
+function closeHeaderMenu() {
+  const panel = document.getElementById("headerMenuPanel");
+  if (panel) panel.style.display = "none";
+}
+
+function runHeaderMenuAction(action) {
+  closeHeaderMenu();
+  action();
+}
+
+document.addEventListener('click', closeHeaderMenu);
 
 // 店舗番号PINでのログイン。店舗番号ごとに `store-{番号}@ff-manage.local` という
 // 固定形式のダミーメールアドレスでFirebase Authenticationの共有アカウントを
