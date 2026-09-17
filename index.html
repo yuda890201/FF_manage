@@ -686,6 +686,16 @@
         <tbody id="scheduleMasterBody"></tbody>
       </table>
     </div>
+    <div style="margin-top:10px; border-top:1px solid #334155; padding-top:8px; flex-shrink:0;">
+      <button class="btn-save-action" style="background:#0ea5e9; width:100%;" onclick="toggleScheduleBulkPanel()">📥 スケジュールをまとめて貼り付け</button>
+      <div id="scheduleBulkPanel" style="display:none; margin-top:8px;">
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px; line-height:1.5;">
+          「曜日 / 商品名 / 朝 / 昼 / 夕」の順に、タブまたはカンマ区切りで1行ずつ貼り付けてください。曜日は 平日・土曜・日祝 で指定します。商品名は商品マスタと照合するため、完全に一致している必要があります。末尾に最低個数を足すこともできます（省略した場合は現在の設定をそのまま残します）。
+        </div>
+        <textarea class="ctrl-input" id="scheduleBulkInput" style="width:100%; height:150px; font-family:monospace; font-size:14px; resize:vertical;" placeholder="平日,ファミチキ,3,5,5&#10;土曜,ファミチキ,2,2,4"></textarea>
+        <button class="btn-save-action" style="background:#f59e0b; margin-top:6px; width:100%;" onclick="runScheduleBulkImport()">この内容で反映する</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2368,6 +2378,107 @@ function copyScheduleToOtherDays() {
 async function saveScheduleMaster(showFeedback = true) {
   syncScheduleInputsToMemory();
   await saveStoreConfigToCloud(showFeedback);
+}
+
+// 📥 紙の陳列表などから、複数曜日のスケジュール目標をまとめて取り込む
+const SCHEDULE_DAY_ALIASES = {
+  "平日": "weekday", "月〜金": "weekday", "weekday": "weekday",
+  "土曜": "saturday", "土": "saturday", "saturday": "saturday",
+  "日祝": "sunday", "日": "sunday", "sunday": "sunday"
+};
+
+function toggleScheduleBulkPanel() {
+  const panel = document.getElementById("scheduleBulkPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+// 「曜日 / 商品名 / 朝 / 昼 / 夕 [/ 最低個数]」の行を、タブまたはカンマ区切りで読む。
+// 最低個数を省略した行は null を返し、取り込み時に現在の設定を引き継ぐ。
+function parseScheduleBulkText(raw) {
+  const rows = [];
+  const unknownDays = [];
+  const unknownItems = [];
+
+  String(raw || "").split(/\r?\n/).forEach(line => {
+    const text = line.trim();
+    if (!text) return;
+    const cols = text.split(/\t|,/).map(c => c.trim());
+    if (cols.length < 5) return;
+    if (cols[0] === "曜日") return; // 見出し行
+
+    const day = SCHEDULE_DAY_ALIASES[cols[0]];
+    if (!day) {
+      unknownDays.push(cols[0]);
+      return;
+    }
+    const item = ITEMS.find(i => i.id !== 0 && i.name.trim() === cols[1]);
+    if (!item) {
+      unknownItems.push(cols[1]);
+      return;
+    }
+    rows.push({
+      day,
+      itemId: item.id,
+      morning: parseInt(cols[2]) || 0,
+      lunch: parseInt(cols[3]) || 0,
+      evening: parseInt(cols[4]) || 0,
+      minQty: cols.length >= 6 && cols[5] !== "" ? (parseInt(cols[5]) || 0) : null
+    });
+  });
+
+  return { rows, unknownDays, unknownItems };
+}
+
+async function runScheduleBulkImport() {
+  if (!currentUser) return;
+  const { rows, unknownDays, unknownItems } = parseScheduleBulkText(document.getElementById("scheduleBulkInput").value);
+
+  if (rows.length === 0) {
+    alert(
+      "取り込める行がありませんでした。\n" +
+      "「曜日 / 商品名 / 朝 / 昼 / 夕」の順に、タブまたはカンマ区切りで貼り付けてください。" +
+      (unknownItems.length > 0 ? `\n\n商品マスタに無い商品名: ${[...new Set(unknownItems)].join("、")}` : "")
+    );
+    return;
+  }
+
+  const dayCounts = {};
+  rows.forEach(r => { dayCounts[r.day] = (dayCounts[r.day] || 0) + 1; });
+  const daySummary = Object.keys(dayCounts).map(d => `${SCHEDULE_DAY_LABELS[d]}: ${dayCounts[d]}件`).join("\n");
+
+  let warn = "";
+  if (unknownItems.length > 0) {
+    warn += `\n\n⚠ 商品マスタに無いため取り込めない商品(${[...new Set(unknownItems)].length}件):\n${[...new Set(unknownItems)].join("、")}`;
+  }
+  if (unknownDays.length > 0) {
+    warn += `\n\n⚠ 曜日として読めなかった行: ${[...new Set(unknownDays)].join("、")}`;
+  }
+
+  const targetStore = getCurrentStore();
+  const ok = confirm(
+    `【${targetStore.name}】のスケジュール目標に、以下を反映します。\n\n${daySummary}\n\n` +
+    `対象の曜日・商品の設定は上書きされます。よろしいですか？${warn}`
+  );
+  if (!ok) return;
+
+  syncScheduleInputsToMemory();
+
+  const conf = getActiveStoreConfig();
+  rows.forEach(r => {
+    if (!conf.schedule[r.day]) conf.schedule[r.day] = {};
+    const prev = conf.schedule[r.day][r.itemId] || {};
+    conf.schedule[r.day][r.itemId] = {
+      morning: r.morning,
+      lunch: r.lunch,
+      evening: r.evening,
+      minQty: r.minQty === null ? (prev.minQty || 0) : r.minQty
+    };
+  });
+
+  markUnsaved();
+  await saveStoreConfigToCloud(true);
+  renderScheduleMasterTable();
+  alert(`${rows.length}件のスケジュール目標を反映しました。\n内容を確認してください。`);
 }
 
 function renderLayoutMasterEditor() {
