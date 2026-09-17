@@ -2364,8 +2364,18 @@ document.getElementById('login-form').addEventListener('submit', function(e) {
   auth.signInWithEmailAndPassword(email, pin).then(() => {
     pendingLoginStoreId = pin;
   }).catch(err => {
-    errEl.innerText = '店舗番号(PIN)が正しくありません。';
     console.error(err);
+    if (err.code === 'auth/too-many-requests') {
+      errEl.innerText = 'ログイン試行が多すぎるため、一時的にブロックされています。しばらく時間をおいて再度お試しください。';
+    } else if (err.code === 'auth/network-request-failed') {
+      errEl.innerText = '通信エラーです。インターネット接続を確認してから再度お試しください。';
+    } else if (err.code === 'auth/user-disabled') {
+      errEl.innerText = 'このアカウントは無効化されています。管理者にお問い合わせください。';
+    } else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
+      errEl.innerText = '店舗番号(PIN)が正しくありません。';
+    } else {
+      errEl.innerText = `ログインに失敗しました。(${err.code || err.message}) 時間をおいて再度お試しいただくか、管理者にお問い合わせください。`;
+    }
   });
 });
 
