@@ -931,7 +931,31 @@ let currentActiveView = "home";
 // クラウドからの読み込みに成功したか。失敗したまま保存すると初期設定で上書きしてしまうため、
 // これが false の間は保存処理を行わない
 let initialDataLoaded = false;
+// クラウドから設定を読み込み済みの店舗ID。
+// 未読込の店舗では getActiveStoreConfig() が初期設定を返すため、それをそのまま保存すると
+// その店舗のクラウド上の什器配置・スケジュールを初期設定で丸ごと消してしまう。
+// 「読み込めた店舗しか保存しない」ことを保証するために使う。
+const loadedStoreConfigIds = new Set();
 let scheduleDisplayedDay = "weekday"; // スケジュール画面に現在表示している曜日
+
+// 指定した店舗の設定をクラウドから読み込む（読み込み済みなら何もしない）。
+// 通信に失敗した場合は例外を投げ、呼び出し元が「初期設定のまま保存する」ことを
+// 避けられるようにする（黙って初期設定を使うと、その店舗の設定が消える）。
+async function ensureStoreConfigLoaded(storeId) {
+  if (!storeId || loadedStoreConfigIds.has(storeId)) return;
+  const doc = await db.collection('storesConfig').doc(storeId).get();
+  if (doc.exists) {
+    const conf = doc.data();
+    const target = STORES_CONFIG[storeId] || {};
+    STORES_CONFIG[storeId] = {
+      fixtures: conf.fixtures || target.fixtures || JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
+      schedule: conf.schedule || target.schedule || JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
+      timeSlots: conf.timeSlots || target.timeSlots || JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
+    };
+  }
+  // ドキュメントが無い＝まだ設定を作っていない新規店舗。初期設定から始めてよい
+  loadedStoreConfigIds.add(storeId);
+}
 
 function getCurrentStore() {
   return STORE_MASTER.find(s => s.id === currentStoreId)
@@ -1015,6 +1039,7 @@ async function loadInitialDataFromSpreadsheet() {
     if (archiveDoc.exists) {
       DAILY_ARCHIVES[getTodayDateString()] = archiveDoc.data().counts || {};
     }
+    loadedStoreConfigIds.add(curStore.id);
     applyCurrentStoreData();
     clearUnsaved();
     initialDataLoaded = true;
@@ -1140,6 +1165,12 @@ async function saveStoreConfigToCloud(showFeedback = true) {
     return;
   }
   const curStore = getCurrentStore();
+  // 設定を読み込めていない店舗を保存すると、初期設定でその店舗の設定を消してしまう
+  if (!loadedStoreConfigIds.has(curStore.id)) {
+    console.warn("この店舗の設定をまだ読み込めていないため、保存を中止しました。");
+    alert(`【${curStore.name}】の設定をまだ読み込めていないため、保存を中止しました。\n電波の状態を確認して、画面を開き直してください。`);
+    return;
+  }
   if (showFeedback) showLockOverlay("設定を保存中...", `【${curStore.name}】の設定を同期しています`);
 
   try {
@@ -1163,6 +1194,10 @@ async function saveSnapshotToCloud(showFeedback = false) {
     return;
   }
   const curStore = getCurrentStore();
+  if (!loadedStoreConfigIds.has(curStore.id)) {
+    console.warn("この店舗の設定をまだ読み込めていないため、保存を中止しました。");
+    return;
+  }
   const fullSnapshot = getActiveStoreConfig();
 
   try {
@@ -1687,6 +1722,9 @@ async function deleteStoreRow(idx) {
     if (currentStoreId === store.id) {
       currentStoreId = STORE_MASTER[0].id;
       localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+      // 移動先の店舗の設定を読み込んでから表示する(未読込のまま操作させると、
+      // 画面に出た初期設定をその店舗の設定だと思い込んで保存してしまう)
+      await ensureStoreConfigLoaded(currentStoreId);
       applyCurrentStoreData();
     }
 
@@ -1743,8 +1781,29 @@ async function saveStoreMaster(showFeedback = true) {
 
   // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
   // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
+  const prevStoreId = currentStoreId;
   currentStoreId = (STORE_MASTER[selectedIdx] || STORE_MASTER[0]).id;
   localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+
+  // 店舗を切り替えたら、切替先の設定をクラウドから読み込んでから保存に進む。
+  // 読み込まずに進むと getActiveStoreConfig() が初期設定を返し、
+  // その内容で切替先の店舗の什器配置・スケジュールを丸ごと上書きしてしまう
+  if (currentStoreId !== prevStoreId) {
+    if (showFeedback) showLockOverlay("店舗を切り替え中...", "切替先の店舗の設定を読み込んでいます");
+    try {
+      await ensureStoreConfigLoaded(currentStoreId);
+    } catch (err) {
+      console.error("切替先の店舗設定の読込に失敗:", err);
+      // 読み込めないまま保存すると切替先の設定を消してしまうため、切替自体を取り消す
+      currentStoreId = prevStoreId;
+      localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+      renderStoreMasterTable();
+      alert("切替先の店舗の設定を読み込めませんでした。電波の状態を確認して、もう一度お試しください。\n（設定が初期状態で上書きされるのを防ぐため、店舗の切り替えを中止しました）");
+      return;
+    } finally {
+      if (showFeedback) hideLockOverlay();
+    }
+  }
 
   if (renamed.length > 0) {
     if (showFeedback) showLockOverlay("店舗IDの変更を反映中...", "変更前のIDのデータを新しいIDへ引き継いでいます");
