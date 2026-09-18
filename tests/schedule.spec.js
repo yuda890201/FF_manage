@@ -167,3 +167,47 @@ test.describe('一括貼り付け', () => {
     expect(await readSchedule(page, 'weekday')).toEqual(before);
   });
 });
+
+// 個数の入力欄は、タブレットを指で操作しながら打ち替える。
+// 欄が小さいと隣の欄を触ってしまい、気づかないまま別の商品の目標を書き換えてしまう。
+test.describe('個数入力欄の大きさ', () => {
+  // 指で確実に押せる大きさの目安（Apple/Googleのガイドラインがいずれも44px以上）
+  const MIN_TAP_PX = 44;
+
+  test('4つの個数欄すべてが、指で押せる大きさになっている', async ({ page }) => {
+    for (const id of ['#sm-m-1', '#sm-l-1', '#sm-e-1', '#sm-min-1']) {
+      const box = await page.locator(id).boundingBox();
+      expect(box.height, `${id} の高さ`).toBeGreaterThanOrEqual(MIN_TAP_PX);
+      expect(box.width, `${id} の幅`).toBeGreaterThanOrEqual(MIN_TAP_PX);
+    }
+  });
+
+  test('隣り合う個数欄が重ならず、間隔が空いている', async ({ page }) => {
+    const left = await page.locator('#sm-m-1').boundingBox();
+    const right = await page.locator('#sm-l-1').boundingBox();
+    expect(right.x).toBeGreaterThan(left.x + left.width);
+  });
+
+  test('上下の行の個数欄が、指1本分離れている', async ({ page }) => {
+    const upper = await page.locator('#sm-m-1').boundingBox();
+    const lower = await page.locator('#sm-m-2').boundingBox();
+    expect(lower.y).toBeGreaterThan(upper.y + upper.height);
+  });
+
+  test('欄をタッチすると今の値が選択され、そのまま打ち替えられる', async ({ page }) => {
+    await page.fill('#sm-m-1', '12');
+    await page.locator('#sm-l-1').click();
+    await page.locator('#sm-m-1').click();
+    // 選択された状態なら、続けて入力した数字が古い値を置き換える
+    await page.keyboard.type('7');
+    expect(await page.inputValue('#sm-m-1')).toBe('7');
+  });
+
+  test('欄を大きくしても、横スクロールしないと入力できない状態にはならない', async ({ page }) => {
+    const overflow = await page.evaluate(() => {
+      const scroll = document.querySelector('#scheduleMasterView .table-scroll');
+      return scroll.scrollWidth - scroll.clientWidth;
+    });
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
