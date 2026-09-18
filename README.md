@@ -1,5 +1,19 @@
 # FF_manage
 
+## 画面の自動テスト
+
+`index.html` を変更すると、GitHub Actionsが自動で画面の動作を確認します(`.github/workflows/ui-tests.yml`)。実際の運用端末である12.3インチタブレット相当の画面サイズで、ホーム画面のタイル表示・タブ切り替え・スケジュール目標・店舗マスタを検証しています。
+
+手元で実行する場合:
+
+```
+npm install
+npx playwright install chromium   # 初回のみ
+npm test
+```
+
+テストが失敗すると、Actionsの実行結果に失敗時のスクリーンショットが残るので、どこが崩れたかを画面で確認できます。
+
 ## データ管理 (Firebase)
 
 このアプリはFirebase Authentication(店舗番号PINコード方式)とCloud Firestoreでデータを管理しています。
