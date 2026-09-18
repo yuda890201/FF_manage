@@ -468,6 +468,18 @@
   .ctrl-input { font-size: 16px; }
   .ctrl-select { font-size: 13px; }
 
+  /* スケジュール目標の個数入力欄。実際の運用端末である12.3インチタブレットで
+     指のまま数字を打ち替えられるよう、指先で押せる大きさ(48px)を確保する。
+     数字は中央に大きく出し、どの欄を触っているか離れた位置からでも分かるようにする */
+  .qty-input { min-height: 48px; font-size: 22px; font-weight: bold; text-align: center; padding: 4px 2px; }
+  .qty-input:focus { outline: none; border-color: #38bdf8; background: #082f49; }
+  /* 数値入力の増減ボタンは指では押せない大きさで、隣の数字を触るときの誤タップにしかならないため消す */
+  .qty-input { -moz-appearance: textfield; }
+  .qty-input::-webkit-outer-spin-button,
+  .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  /* 個数欄を大きくした分、行も高くなるので商品名も合わせて読みやすくする */
+  .schedule-table td { padding: 6px 8px; font-size: 14px; }
+
   .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; flex-shrink: 0; }
   .summary-card { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; }
   .summary-label { font-size: 10px; color: #94a3b8; font-weight: bold; }
@@ -763,12 +775,12 @@
       </div>
     </div>
     <div class="table-scroll">
-      <table class="master-table">
+      <table class="master-table schedule-table">
         <thead>
           <tr>
             <th>商品名</th><th>分類</th>
-            <th style="width:80px;">朝 最高在庫</th><th style="width:80px;">昼 最高在庫</th>
-            <th style="width:80px;">夕 最高在庫</th><th style="width:80px;">最低個数</th>
+            <th style="width:120px;">朝 最高在庫</th><th style="width:120px;">昼 最高在庫</th>
+            <th style="width:120px;">夕 最高在庫</th><th style="width:120px;">最低個数</th>
           </tr>
         </thead>
         <tbody id="scheduleMasterBody"></tbody>
@@ -2466,10 +2478,10 @@ function renderScheduleMasterTable() {
     return `
       <tr>
         <td><b>${item.name}</b></td><td><span style="color:#94a3b8;">${item.category}</span></td>
-        <td><input class="ctrl-input" type="number" id="sm-m-${item.id}" value="${t.morning}" onchange="markUnsaved()"></td>
-        <td><input class="ctrl-input" type="number" id="sm-l-${item.id}" value="${t.lunch}" onchange="markUnsaved()"></td>
-        <td><input class="ctrl-input" type="number" id="sm-e-${item.id}" value="${t.evening}" onchange="markUnsaved()"></td>
-        <td><input class="ctrl-input" type="number" id="sm-min-${item.id}" value="${t.minQty}" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input qty-input" type="number" inputmode="numeric" id="sm-m-${item.id}" value="${t.morning}" onfocus="this.select()" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input qty-input" type="number" inputmode="numeric" id="sm-l-${item.id}" value="${t.lunch}" onfocus="this.select()" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input qty-input" type="number" inputmode="numeric" id="sm-e-${item.id}" value="${t.evening}" onfocus="this.select()" onchange="markUnsaved()"></td>
+        <td><input class="ctrl-input qty-input" type="number" inputmode="numeric" id="sm-min-${item.id}" value="${t.minQty}" onfocus="this.select()" onchange="markUnsaved()"></td>
       </tr>
     `;
   }).join("");
