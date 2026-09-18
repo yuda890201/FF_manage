@@ -527,6 +527,13 @@
 
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  /* バックアップの世代選び。タブレットの指で押せるよう、1件あたり48px以上を確保する */
+  .backup-modal-content { border-color: #38bdf8; width: 380px; max-width: 92vw; }
+  .backup-list { display: flex; flex-direction: column; gap: 6px; max-height: 44vh; overflow-y: auto; }
+  .backup-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 8px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #fff; cursor: pointer; text-align: left; }
+  .backup-entry:active { background: #1e3a5f; }
+  .backup-entry-time { font-size: 14px; font-weight: bold; }
+  .backup-entry-go { font-size: 11px; color: #38bdf8; white-space: nowrap; }
 
   #printSheetContainer { display: none; }
 
@@ -822,6 +829,18 @@
 </div>
 
 <!-- 廃棄モーダル -->
+<!-- バックアップの世代を選んで復元するモーダル -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal-content backup-modal-content">
+    <div style="font-size:13px; font-weight:900; color:#38bdf8;">🔄 <span id="backupStoreName"></span> を戻す時点を選ぶ</div>
+    <div style="font-size:11px; color:#94a3b8; line-height:1.5;">
+      新しい順に並んでいます。選んだ時点の什器配置・スケジュール・在庫に戻り、クラウドにも保存されます。
+    </div>
+    <div class="backup-list" id="backupListBody"></div>
+    <button class="btn-save-action" style="background:#475569;" onclick="closeBackupModal()">キャンセル</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="wasteModal">
   <div class="modal-content">
     <div style="font-size:13px; font-weight:900; color:#f87171;" id="wasteModalTitle">廃棄登録</div>
@@ -1150,6 +1169,7 @@ async function loadInitialDataFromSpreadsheet() {
     clearUnsaved();
     initialDataLoaded = true;
     document.getElementById("loadErrorOverlay").style.display = "none";
+    await autoBackupIfNeeded();
   } catch (err) {
     // 読み込みに失敗したまま操作させると、画面に出ている初期設定を本物と思い込んで
     // 保存してしまい、クラウドの正しいデータを丸ごと上書きしてしまう。
@@ -1167,51 +1187,171 @@ async function retryInitialLoad() {
   await loadInitialDataFromSpreadsheet();
 }
 
+// ===== バックアップ =====
+// 以前は店舗ごとに1世代しか持てず、新しいバックアップを取ると前の内容が消えていた。
+// 「気づいたときには、壊れた状態でバックアップを上書きしていた」を防ぐため、
+// 日時ごとのドキュメントに分けて複数世代を残す。
+const BACKUP_KEEP_GENERATIONS = 7;
+
+/** バックアップのドキュメントIDに使う日時（YYYY-MM-DD_HHMM） */
+function backupStampFromDate(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+// 店舗IDに「_」が含まれても切り分けられるよう、区切りは「__」にする
+function backupDocId(storeId, stamp) { return `${storeId}__${stamp}`; }
+
+function parseBackupDocId(docId) {
+  const sep = docId.lastIndexOf('__');
+  // 区切りが無いものは、世代管理を入れる前の「1世代だけ」のバックアップ
+  if (sep < 0) return { storeId: docId, stamp: "" };
+  return { storeId: docId.slice(0, sep), stamp: docId.slice(sep + 2) };
+}
+
+/** 指定した店舗のバックアップを、新しい順に一覧で取り出す */
+async function listBackupsForStore(storeId) {
+  const snap = await db.collection('manualBackups').get();
+  const list = [];
+  snap.docs.forEach(d => {
+    const parsed = parseBackupDocId(d.id);
+    if (parsed.storeId !== storeId) return;
+    const data = d.data() || {};
+    list.push({
+      docId: d.id,
+      stamp: parsed.stamp,
+      backedUpAt: data.backedUpAt || 0,
+      isLegacy: !parsed.stamp
+    });
+  });
+  list.sort((a, b) => (b.backedUpAt || 0) - (a.backedUpAt || 0));
+  return list;
+}
+
+function backupLabel(entry) {
+  if (entry.backedUpAt) return new Date(entry.backedUpAt).toLocaleString('ja-JP');
+  return entry.isLegacy ? "日時不明（古い形式のバックアップ）" : entry.stamp;
+}
+
+/** 世代数を超えた古いバックアップを消す */
+async function pruneOldBackups(storeId) {
+  const list = await listBackupsForStore(storeId);
+  // 古い形式の1世代バックアップは復旧の最後の頼りなので、世代数には数えず残す
+  const generational = list.filter(b => !b.isLegacy);
+  for (const old of generational.slice(BACKUP_KEEP_GENERATIONS)) {
+    try {
+      await db.collection('manualBackups').doc(old.docId).delete();
+    } catch (err) {
+      console.error("古いバックアップの削除に失敗:", err);
+    }
+  }
+}
+
+/** 1店舗分のバックアップを作る。設定が取れなければ false を返す */
+async function createBackupForStore(store, backedUpAt, stamp) {
+  const storeConfig = store.id === getCurrentStore().id
+    ? getActiveStoreConfig()
+    : (await db.collection('storesConfig').doc(store.id).get()).data() || null;
+  if (!storeConfig) return false;
+
+  await db.collection('manualBackups').doc(backupDocId(store.id, stamp)).set({
+    items: ITEMS,
+    stores: STORE_MASTER,
+    storeConfig,
+    storeId: store.id,
+    backedUpAt
+  });
+  await pruneOldBackups(store.id);
+  return true;
+}
+
 // 📦 手動バックアップ作成（全店舗分）
 async function handleManualBackup() {
   if (!currentUser) return;
-  const curStore = getCurrentStore();
   await saveCurrentViewInputs();
 
   showLockOverlay("バックアップ作成中...", "全店舗の安全なバックアップを作成しています");
   try {
-    const backedUpAt = Date.now();
+    const now = new Date();
+    const stamp = backupStampFromDate(now);
+    let created = 0;
     for (const store of STORE_MASTER) {
-      const storeConfig = store.id === curStore.id
-        ? getActiveStoreConfig()
-        : (await db.collection('storesConfig').doc(store.id).get()).data() || null;
-
-      if (!storeConfig) continue;
-
-      const payloadData = {
-        items: ITEMS,
-        stores: STORE_MASTER,
-        storeConfig,
-        backedUpAt
-      };
-      await db.collection('manualBackups').doc(store.id).set(payloadData);
+      if (await createBackupForStore(store, now.getTime(), stamp)) created++;
     }
-
-    alert(`全店舗（${STORE_MASTER.length}件）の手動バックアップを正常に作成しました！`);
+    alert(`全店舗（${created}件）のバックアップを作成しました。\n直近${BACKUP_KEEP_GENERATIONS}世代まで残ります。`);
   } catch (err) {
     console.error("Backup Error:", err);
-    alert("バックアップの作成に失敗しました。");
+    alert("バックアップの作成に失敗しました。電波の状態を確認して、もう一度お試しください。");
   } finally {
     hideLockOverlay();
   }
 }
 
-// 🔄 バックアップ復元
+// 1日1回、その日の最初の起動時に自動でバックアップを取る。
+// 手動バックアップは操作を忘れると1世代も残らないため、
+// 「昨日の状態に戻す」がいつでもできる状態を保っておく。
+async function autoBackupIfNeeded() {
+  if (!currentUser || !initialDataLoaded) return;
+  const store = getCurrentStore();
+  try {
+    const list = await listBackupsForStore(store.id);
+    const today = getTodayDateString();
+    if (list.some(b => b.stamp.startsWith(today))) return;
+
+    const now = new Date();
+    await createBackupForStore(store, now.getTime(), backupStampFromDate(now));
+  } catch (err) {
+    // 自動バックアップの失敗で起動を止めないが、黙って消えないよう記録は残す
+    console.error("自動バックアップに失敗:", err);
+  }
+}
+
+// 🔄 バックアップ復元（世代を選ぶ）
 async function handleManualRestore() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
 
-  // いつ時点のバックアップかを確認してから戻せるように、先に読み出す。
-  // 意図しない時点に戻してしまう事故を防ぐため
-  showLockOverlay("バックアップを確認中...", `【${curStore.name}】のバックアップを読み込んでいます`);
+  showLockOverlay("バックアップを確認中...", `【${curStore.name}】のバックアップを探しています`);
+  let list;
+  try {
+    list = await listBackupsForStore(curStore.id);
+  } catch (err) {
+    hideLockOverlay();
+    console.error("Restore Fetch Error:", err);
+    alert("バックアップの読み込みに失敗しました。電波の状態を確認してもう一度お試しください。");
+    return;
+  }
+  hideLockOverlay();
+
+  if (list.length === 0) {
+    alert("この店舗のバックアップが見つかりませんでした。");
+    return;
+  }
+
+  const body = document.getElementById("backupListBody");
+  body.innerHTML = list.map(entry => `
+    <button class="backup-entry" onclick="restoreFromBackup('${entry.docId}')">
+      <span class="backup-entry-time">${backupLabel(entry)}</span>
+      <span class="backup-entry-go">この時点に戻す</span>
+    </button>
+  `).join("");
+  document.getElementById("backupStoreName").innerText = curStore.name;
+  document.getElementById("backupModal").style.display = "flex";
+}
+
+function closeBackupModal() {
+  document.getElementById("backupModal").style.display = "none";
+}
+
+/** 選んだ世代のバックアップで、この店舗のデータを復元する */
+async function restoreFromBackup(docId) {
+  const curStore = getCurrentStore();
+  closeBackupModal();
+
+  showLockOverlay("バックアップを読み込み中...", `【${curStore.name}】のバックアップを読み込んでいます`);
   let doc;
   try {
-    doc = await db.collection('manualBackups').doc(curStore.id).get();
+    doc = await db.collection('manualBackups').doc(docId).get();
   } catch (err) {
     hideLockOverlay();
     console.error("Restore Fetch Error:", err);
@@ -1221,18 +1361,18 @@ async function handleManualRestore() {
   hideLockOverlay();
 
   if (!doc.exists) {
-    alert("この店舗の手動バックアップデータが見つかりませんでした。");
+    alert("このバックアップは見つかりませんでした。");
     return;
   }
 
-  const backedUpAt = doc.data().backedUpAt;
-  const backedUpAtText = backedUpAt
-    ? new Date(backedUpAt).toLocaleString('ja-JP')
+  const bck = doc.data();
+  const backedUpAtText = bck.backedUpAt
+    ? new Date(bck.backedUpAt).toLocaleString('ja-JP')
     : "不明（日時が記録されていません）";
 
   if (!confirm(
-    `【${curStore.name}】を手動バックアップの状態に復元します。\n\n` +
-    `このバックアップを取った日時: ${backedUpAtText}\n\n` +
+    `【${curStore.name}】を次の時点の状態に復元します。\n\n` +
+    `バックアップの日時: ${backedUpAtText}\n\n` +
     `現在のデータはこの内容で上書きされ、クラウドにも保存されます。\n` +
     `（商品マスタは全店舗共通のため、この操作で全店舗の商品マスタが復元されます）\n` +
     `よろしいですか？`
@@ -1240,7 +1380,6 @@ async function handleManualRestore() {
 
   showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
   try {
-    const bck = doc.data();
     if (bck.items && bck.items.length > 0) {
       ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
     }
@@ -1250,6 +1389,9 @@ async function handleManualRestore() {
     applyCurrentStoreData();
     // 復元した内容をメモリ上だけでなくクラウドにも保存する（保存しないと再読み込みで復元前の状態に戻ってしまうため）
     await saveStoreConfigToCloud(false);
+    // 在庫も復元した内容に揃える（分離した保存先が古いままだと、次に開いたとき在庫だけ戻ってしまう）
+    stockSaveDirty = true;
+    await flushStockSave();
     renderItemMasterTable();
     renderHomeFixtures();
     alert(`【${curStore.name}】を ${backedUpAtText} 時点の状態に復元し、クラウドにも保存しました。`);
