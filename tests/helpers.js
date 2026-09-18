@@ -8,6 +8,23 @@ const path = require('path');
 
 const APP_URL = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
+/**
+ * Firebase SDK の読み込みを遮断する。
+ *
+ * 読み込まれると onAuthStateChanged が「未ログイン」で発火し、ログイン画面が
+ * 再表示されて currentUser も消えるため、テスト用に入れた状態が壊れてしまう。
+ * SDK が無ければ auth は null のままで、この処理自体が登録されない。
+ * 外部通信にも依存しなくなるので、実行環境によって結果が変わらない。
+ */
+async function blockFirebaseSdk(page) {
+  await page.route('**/firebasejs/**', route => route.abort());
+}
+
+/** テスト用の状態を入れたあと、ログイン画面が再表示されていないことを確かめる */
+async function ensureLoggedInView(page) {
+  await page.waitForSelector('#login-overlay', { state: 'hidden' });
+}
+
 // 清川二丁目店の実際の什器構成に合わせたテストデータ
 // 中華まん 1列×6段 / ホッターズ 6列×3段 / 常温総菜 2列×4段
 const FIXTURE_LAYOUT = {
@@ -25,6 +42,7 @@ const FIXTURE_LAYOUT = {
  * 商品名の文字サイズやタイルのレイアウトを検証する用途。
  */
 async function openHomeWithFixtures(page) {
+  await blockFirebaseSdk(page);
   await page.goto(APP_URL);
   await page.evaluate((layout) => {
     document.getElementById('login-overlay').style.display = 'none';
@@ -69,6 +87,7 @@ async function openHomeWithFixtures(page) {
     switchView('home');
   }, FIXTURE_LAYOUT);
 
+  await ensureLoggedInView(page);
   // autoFitTitles が走り終わるのを待つ(描画後にsetTimeoutで実行される)
   await page.waitForTimeout(400);
 }
@@ -78,6 +97,7 @@ async function openHomeWithFixtures(page) {
  * スケジュール目標や画面遷移など、什器レイアウトに依存しない検証用。
  */
 async function openAppMinimal(page, viewName = 'home') {
+  await blockFirebaseSdk(page);
   await page.goto(APP_URL);
   await page.evaluate((view) => {
     document.getElementById('login-overlay').style.display = 'none';
@@ -117,6 +137,7 @@ async function openAppMinimal(page, viewName = 'home') {
     applyCurrentStoreData();
     switchView(view);
   }, viewName);
+  await ensureLoggedInView(page);
   await page.waitForTimeout(250);
 }
 
@@ -144,4 +165,12 @@ function autoHandleDialogs(page, { accept = true } = {}) {
   };
 }
 
-module.exports = { APP_URL, openHomeWithFixtures, openAppMinimal, readSchedule, autoHandleDialogs };
+module.exports = {
+  APP_URL,
+  blockFirebaseSdk,
+  ensureLoggedInView,
+  openHomeWithFixtures,
+  openAppMinimal,
+  readSchedule,
+  autoHandleDialogs
+};

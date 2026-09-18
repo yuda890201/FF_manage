@@ -4,7 +4,7 @@
 // 見える不具合が実際に発生した。その再発を防ぐためのテスト。
 
 const { test, expect } = require('@playwright/test');
-const { APP_URL, autoHandleDialogs } = require('./helpers');
+const { APP_URL, blockFirebaseSdk, ensureLoggedInView, autoHandleDialogs } = require('./helpers');
 
 /**
  * Firestore をメモリ上の簡易スタブに差し替えて店舗マスタを開く。
@@ -12,6 +12,7 @@ const { APP_URL, autoHandleDialogs } = require('./helpers');
  * 保存処理はスタブ化せず実際のコードを通す。
  */
 async function openStoreMaster(page, initialDocs) {
+  await blockFirebaseSdk(page);
   await page.goto(APP_URL);
   await page.evaluate((docs) => {
     document.getElementById('login-overlay').style.display = 'none';
@@ -55,6 +56,7 @@ async function openStoreMaster(page, initialDocs) {
     applyCurrentStoreData();
     switchView('storeMaster');
   }, initialDocs);
+  await ensureLoggedInView(page);
   await page.waitForTimeout(250);
 }
 
