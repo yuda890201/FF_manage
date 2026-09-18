@@ -247,6 +247,15 @@
   .save-state:empty { display: none; }
   .save-state.pending { background: #422006; border: 1px solid #b45309; color: #fbbf24; }
   .save-state.saved { background: #052e16; border: 1px solid #15803d; color: #4ade80; }
+  .save-state.failed { background: #450a0a; border: 1px solid #dc2626; color: #fca5a5; }
+
+  /* 送信できていない記録があることを、操作をふさがずに知らせ続ける。
+     指で押せる大きさの再送信ボタンを添える */
+  .pending-bar { display: none; align-items: center; gap: 10px; background: #422006; border: 1.5px solid #b45309; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; flex-shrink: 0; }
+  .pending-bar-label { font-size: 11px; font-weight: 900; color: #fbbf24; white-space: nowrap; }
+  .pending-bar-text { flex: 1; font-size: 13px; color: #fde68a; }
+  .pending-bar-btn { min-height: 44px; padding: 0 16px; background: #b45309; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+  .pending-bar-btn:active { background: #92400e; }
 
   .waste-alert-bar {
     display: flex;
@@ -540,7 +549,7 @@
   @media print {
     @page { size: A4 landscape; margin: 8mm; }
     body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-    header, .waste-alert-bar, .view-container, .modal-overlay, .sync-lock-overlay { display: none !important; }
+    header, .waste-alert-bar, .pending-bar, .view-container, .modal-overlay, .sync-lock-overlay { display: none !important; }
     #printSheetContainer { display: block !important; background: #ffffff !important; }
     .print-page { page-break-after: always; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
     .print-page:last-child { page-break-after: avoid; }
@@ -629,6 +638,13 @@
 <div class="waste-alert-bar" id="wasteAlertBar">
   <div class="waste-bar-label"><span>⚠️ 期限間近</span></div>
   <div class="waste-items-scroll" id="wasteItemsContainer"></div>
+</div>
+
+<!-- クラウドへ送れていない記録があることを知らせるバー -->
+<div class="pending-bar" id="pendingBar">
+  <div class="pending-bar-label">📡 未送信</div>
+  <div class="pending-bar-text" id="pendingBarText"></div>
+  <button class="pending-bar-btn" onclick="retryPendingSends()">🔄 今すぐ再送信</button>
 </div>
 
 <!-- ホーム画面 -->
@@ -1055,11 +1071,14 @@ async function saveStockToCloud() {
       updatedAt: new Date().toISOString()
     });
     stockSaveDirty = false;
+    stockSaveFailed = false;
   } catch (err) {
     console.error("在庫の保存に失敗:", err);
     // 保存できていないことは画面に出し続ける。次の操作で再度保存を試みる
+    stockSaveFailed = true;
   }
   updateStockSaveState();
+  updatePendingBar();
 }
 
 /** 保留中の在庫保存をすぐ実行する（画面を離れる・閉じるとき） */
@@ -1068,11 +1087,134 @@ async function flushStockSave() {
   await saveStockToCloud();
 }
 
+// ===== 送信できなかった記録の保持と再送信 =====
+// 電波が悪いと調理/販売/廃棄の記録がクラウドへ送れないことがある。
+// 以前は console にエラーを出すだけで画面には何も出ず、記録が黙って消えていた。
+// 送れなかった記録は端末に残し、画面で知らせ、通信が戻ったら送り直す。
+const PENDING_RECORDS_KEY = 'ffmanage_pending_records';
+const PENDING_RETRY_INTERVAL_MS = 60000;
+let pendingRecords = [];   // 送信待ちの調理/販売/廃棄の記録
+let pendingArchives = {};  // 送信待ちの日別集計 { "店舗ID_日付": 集計 }
+let isFlushingPending = false;
+let stockSaveFailed = false;
+
+function loadPendingRecords() {
+  try {
+    const raw = localStorage.getItem(PENDING_RECORDS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    pendingRecords = Array.isArray(saved.records) ? saved.records : [];
+    pendingArchives = (saved.archives && typeof saved.archives === 'object') ? saved.archives : {};
+  } catch (err) {
+    console.error("未送信データの読み込みに失敗:", err);
+  }
+}
+
+// 端末に残しておく。アプリを閉じたり再読み込みしても送信待ちの記録が消えないようにする
+function persistPendingRecords() {
+  try {
+    localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify({ records: pendingRecords, archives: pendingArchives }));
+  } catch (err) {
+    console.error("未送信データの保存に失敗:", err);
+  }
+}
+
+function queuePendingRecord(payload) {
+  pendingRecords.push(payload);
+  persistPendingRecords();
+  updatePendingBar();
+}
+
+// 日別集計はその日の合計なので、同じ日の分は最新の内容で上書きしてよい
+function queuePendingArchive(docId, counts) {
+  pendingArchives[docId] = JSON.parse(JSON.stringify(counts));
+  persistPendingRecords();
+  updatePendingBar();
+}
+
+function hasPendingSends() {
+  return pendingRecords.length > 0 || Object.keys(pendingArchives).length > 0 || stockSaveFailed;
+}
+
+/** 送信待ちの記録をまとめて送り直す */
+async function flushPendingRecords() {
+  if (isFlushingPending || !currentUser) return;
+  if (pendingRecords.length === 0 && Object.keys(pendingArchives).length === 0) return;
+
+  isFlushingPending = true;
+  updatePendingBar();
+  try {
+    // 送れたものだけ取り除き、送れなかったものは次の機会まで残す
+    const remaining = [];
+    for (const payload of pendingRecords) {
+      try {
+        await db.collection('recordLog').add(payload);
+      } catch (err) {
+        console.error("記録の再送信に失敗:", err);
+        remaining.push(payload);
+      }
+    }
+    pendingRecords = remaining;
+
+    for (const docId of Object.keys(pendingArchives)) {
+      try {
+        await db.collection('dailyArchives').doc(docId).set({ counts: pendingArchives[docId] }, { merge: true });
+        delete pendingArchives[docId];
+      } catch (err) {
+        console.error("集計の再送信に失敗:", err);
+      }
+    }
+    persistPendingRecords();
+  } finally {
+    isFlushingPending = false;
+    updatePendingBar();
+  }
+}
+
+/** 在庫の保存と記録の再送信をまとめてやり直す（画面には何も出さない） */
+async function retrySilently() {
+  if (stockSaveFailed) stockSaveDirty = true;
+  await flushStockSave();
+  await flushPendingRecords();
+}
+
+/** 「今すぐ再送信」ボタン。結果をその場で知らせる */
+async function retryPendingSends() {
+  await retrySilently();
+  alert(hasPendingSends()
+    ? "まだ送信できていない記録があります。電波の状態を確認して、もう一度お試しください。\n（記録はこの端末に残っているので、消えることはありません）"
+    : "送信待ちの記録をすべて送信しました。");
+}
+
+/** 送信できていない記録があることを画面に出し続ける */
+function updatePendingBar() {
+  const bar = document.getElementById("pendingBar");
+  const text = document.getElementById("pendingBarText");
+  if (!bar || !text) return;
+
+  if (!hasPendingSends()) {
+    bar.style.display = "none";
+    return;
+  }
+  const parts = [];
+  if (pendingRecords.length > 0) parts.push(`調理・販売の記録 ${pendingRecords.length} 件`);
+  if (Object.keys(pendingArchives).length > 0) parts.push("日別の集計");
+  if (stockSaveFailed) parts.push("在庫数");
+  text.innerText = isFlushingPending
+    ? "再送信しています…"
+    : `${parts.join("・")}をクラウドへ送れていません（この端末に残しています）`;
+  bar.style.display = "flex";
+}
+
 /** 在庫が保存済みかどうかをヘッダーに表示する */
 function updateStockSaveState() {
   const el = document.getElementById("stockSaveState");
   if (!el) return;
-  if (stockSaveDirty) {
+  if (stockSaveFailed) {
+    // 保存できていないのに「保存中」と出すと、保存済みのつもりで閉じてしまう
+    el.className = "save-state failed";
+    el.innerText = "⚠ 在庫を保存できていません";
+  } else if (stockSaveDirty) {
     el.className = "save-state pending";
     el.innerText = "● 在庫を保存中…";
   } else {
@@ -1170,6 +1312,8 @@ async function loadInitialDataFromSpreadsheet() {
     initialDataLoaded = true;
     document.getElementById("loadErrorOverlay").style.display = "none";
     await autoBackupIfNeeded();
+    // 前回送れずに端末へ残った記録を、通信が戻ったこの時点で送り直す
+    await flushPendingRecords();
   } catch (err) {
     // 読み込みに失敗したまま操作させると、画面に出ている初期設定を本物と思い込んで
     // 保存してしまい、クラウドの正しいデータを丸ごと上書きしてしまう。
@@ -1522,11 +1666,19 @@ function recordArchiveAndSync(itemId, type, qty) {
 
   if (!currentUser) return;
 
-  db.collection('recordLog').add(payloadData).catch(err => console.error("Firestore送信エラー:", err));
+  // 送信に失敗したら端末に残しておき、あとで送り直す（黙って消さない）
+  db.collection('recordLog').add(payloadData).catch(err => {
+    console.error("Firestore送信エラー:", err);
+    queuePendingRecord(payloadData);
+  });
 
-  db.collection('dailyArchives').doc(`${curStore.id}_${dateKey}`)
+  const archiveDocId = `${curStore.id}_${dateKey}`;
+  db.collection('dailyArchives').doc(archiveDocId)
     .set({ counts: DAILY_ARCHIVES[dateKey] }, { merge: true })
-    .catch(err => console.error("集計保存エラー:", err));
+    .catch(err => {
+      console.error("集計保存エラー:", err);
+      queuePendingArchive(archiveDocId, DAILY_ARCHIVES[dateKey]);
+    });
 }
 
 function updateClock() {
@@ -3178,6 +3330,15 @@ window.addEventListener('resize', autoFitTitles);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushStockSave();
 });
+
+// 送信待ちの記録は端末に残っているので、アプリを開き直しても引き継ぐ
+loadPendingRecords();
+updatePendingBar();
+
+// 電波が戻ったときに自動で送り直す（スタッフが再送信ボタンを押さなくても復旧する）
+setInterval(() => {
+  if (hasPendingSends()) retrySilently();
+}, PENDING_RETRY_INTERVAL_MS);
 
 setInterval(updateClock, 1000);
 updateClock();
