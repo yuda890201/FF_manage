@@ -47,6 +47,9 @@ async function openHomeWithFixtures(page) {
   await page.evaluate((layout) => {
     document.getElementById('login-overlay').style.display = 'none';
     currentUser = { uid: 'test' };
+    // クラウドからの読み込みに成功した状態を再現する。false のままだと保存処理が
+    // 中止されてしまい、保存経路を通らないテストになってしまう
+    initialDataLoaded = true;
 
     ITEMS = [{ id: 0, name: '（空き）', category: '-', price: 0, limitHour: 0 }];
     let nextId = 1;
@@ -102,6 +105,9 @@ async function openAppMinimal(page, viewName = 'home') {
   await page.evaluate((view) => {
     document.getElementById('login-overlay').style.display = 'none';
     currentUser = { uid: 'test' };
+    // クラウドからの読み込みに成功した状態を再現する。false のままだと保存処理が
+    // 中止されてしまい、保存経路を通らないテストになってしまう
+    initialDataLoaded = true;
     ITEMS = [
       { id: 0, name: '（空き）', category: '-', price: 0, limitHour: 0 },
       { id: 1, name: 'ファミチキ', category: 'ホッターズ', price: 230, limitHour: 4, imageUrl: '' },
