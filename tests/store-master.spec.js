@@ -17,6 +17,7 @@ async function openStoreMaster(page, initialDocs) {
   await page.evaluate((docs) => {
     document.getElementById('login-overlay').style.display = 'none';
     currentUser = { uid: 'test' };
+    initialDataLoaded = true;
     window.__firestore = JSON.parse(JSON.stringify(docs));
 
     db = {

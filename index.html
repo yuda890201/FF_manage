@@ -553,6 +553,20 @@
   <div class="sync-lock-subtext" id="syncLockDesc">画面を操作せずにお待ちください</div>
 </div>
 
+<!-- 読み込みに失敗したときは操作させない。
+     初期設定を本物のデータと思って操作したまま保存すると、
+     クラウドの正しいデータを上書きしてしまうため -->
+<div class="sync-lock-overlay" id="loadErrorOverlay">
+  <div style="font-size:40px;">📡</div>
+  <div class="sync-lock-text">データを読み込めませんでした</div>
+  <div class="sync-lock-subtext" style="max-width:420px; text-align:center; line-height:1.6;">
+    電波の状態を確認してください。<br>
+    このまま操作すると、クラウドに保存されている正しいデータを<br>
+    上書きしてしまうため、操作を止めています。
+  </div>
+  <button class="btn-save-action" style="background:#16a34a; min-width:200px;" onclick="retryInitialLoad()">🔄 もう一度読み込む</button>
+</div>
+
 <header>
   <div class="header-row-top">
     <div class="header-left-group">
@@ -902,6 +916,9 @@ let currentDayType = "weekday";
 let activeWasteTarget = null;
 let hasUnsavedChanges = false; // 未保存フラグ
 let currentActiveView = "home";
+// クラウドからの読み込みに成功したか。失敗したまま保存すると初期設定で上書きしてしまうため、
+// これが false の間は保存処理を行わない
+let initialDataLoaded = false;
 let scheduleDisplayedDay = "weekday"; // スケジュール画面に現在表示している曜日
 
 function getCurrentStore() {
@@ -988,11 +1005,23 @@ async function loadInitialDataFromSpreadsheet() {
     }
     applyCurrentStoreData();
     clearUnsaved();
+    initialDataLoaded = true;
+    document.getElementById("loadErrorOverlay").style.display = "none";
   } catch (err) {
-    console.warn("データ読込失敗:", err);
+    // 読み込みに失敗したまま操作させると、画面に出ている初期設定を本物と思い込んで
+    // 保存してしまい、クラウドの正しいデータを丸ごと上書きしてしまう。
+    // そのため、ここでは黙って握りつぶさず、操作自体を止める。
+    console.error("データ読込失敗:", err);
+    initialDataLoaded = false;
+    document.getElementById("loadErrorOverlay").style.display = "flex";
   } finally {
     hideLockOverlay();
   }
+}
+
+async function retryInitialLoad() {
+  document.getElementById("loadErrorOverlay").style.display = "none";
+  await loadInitialDataFromSpreadsheet();
 }
 
 // 📦 手動バックアップ作成（全店舗分）
@@ -1034,28 +1063,53 @@ async function handleManualRestore() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
 
-  if (!confirm(`【${curStore.name}】を手動バックアップの状態に復元し、クラウドにも保存します。\n（商品マスタは全店舗共通のため、この操作で全店舗の商品マスタが復元されます）\nよろしいですか？`)) return;
+  // いつ時点のバックアップかを確認してから戻せるように、先に読み出す。
+  // 意図しない時点に戻してしまう事故を防ぐため
+  showLockOverlay("バックアップを確認中...", `【${curStore.name}】のバックアップを読み込んでいます`);
+  let doc;
+  try {
+    doc = await db.collection('manualBackups').doc(curStore.id).get();
+  } catch (err) {
+    hideLockOverlay();
+    console.error("Restore Fetch Error:", err);
+    alert("バックアップの読み込みに失敗しました。電波の状態を確認してもう一度お試しください。");
+    return;
+  }
+  hideLockOverlay();
+
+  if (!doc.exists) {
+    alert("この店舗の手動バックアップデータが見つかりませんでした。");
+    return;
+  }
+
+  const backedUpAt = doc.data().backedUpAt;
+  const backedUpAtText = backedUpAt
+    ? new Date(backedUpAt).toLocaleString('ja-JP')
+    : "不明（日時が記録されていません）";
+
+  if (!confirm(
+    `【${curStore.name}】を手動バックアップの状態に復元します。\n\n` +
+    `このバックアップを取った日時: ${backedUpAtText}\n\n` +
+    `現在のデータはこの内容で上書きされ、クラウドにも保存されます。\n` +
+    `（商品マスタは全店舗共通のため、この操作で全店舗の商品マスタが復元されます）\n` +
+    `よろしいですか？`
+  )) return;
 
   showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
   try {
-    const doc = await db.collection('manualBackups').doc(curStore.id).get();
-    if (doc.exists) {
-      const bck = doc.data();
-      if (bck.items && bck.items.length > 0) {
-        ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
-      }
-      if (bck.storeConfig) {
-        STORES_CONFIG[curStore.id] = bck.storeConfig;
-      }
-      applyCurrentStoreData();
-      // 復元した内容をメモリ上だけでなくクラウドにも保存する（保存しないと再読み込みで復元前の状態に戻ってしまうため）
-      await saveStoreConfigToCloud(false);
-      renderItemMasterTable();
-      renderHomeFixtures();
-      alert(`【${curStore.name}】の復元が完了し、クラウドにも保存しました！`);
-    } else {
-      alert("この店舗の手動バックアップデータが見つかりませんでした。");
+    const bck = doc.data();
+    if (bck.items && bck.items.length > 0) {
+      ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
     }
+    if (bck.storeConfig) {
+      STORES_CONFIG[curStore.id] = bck.storeConfig;
+    }
+    applyCurrentStoreData();
+    // 復元した内容をメモリ上だけでなくクラウドにも保存する（保存しないと再読み込みで復元前の状態に戻ってしまうため）
+    await saveStoreConfigToCloud(false);
+    renderItemMasterTable();
+    renderHomeFixtures();
+    alert(`【${curStore.name}】を ${backedUpAtText} 時点の状態に復元し、クラウドにも保存しました。`);
   } catch (err) {
     console.error("Restore Error:", err);
     alert("復元に失敗しました。");
@@ -1067,6 +1121,12 @@ async function handleManualRestore() {
 // クラウドへの設定保存（明示的な「保存」ボタン押下時、または変更ありでの画面遷移時のみ実行）
 async function saveStoreConfigToCloud(showFeedback = true) {
   if (!currentUser) return;
+  // 読み込みに失敗している状態で保存すると、画面に出ている初期設定で
+  // クラウドの正しいデータを上書きしてしまう
+  if (!initialDataLoaded) {
+    console.warn("データ読込に失敗しているため、保存を中止しました。");
+    return;
+  }
   const curStore = getCurrentStore();
   if (showFeedback) showLockOverlay("設定を保存中...", `【${curStore.name}】の設定を同期しています`);
 
@@ -1076,7 +1136,9 @@ async function saveStoreConfigToCloud(showFeedback = true) {
     await saveSnapshotToCloud(false);
     clearUnsaved();
   } catch (err) {
+    // 保存できていないのに成功したように見せると、未保存のまま画面を閉じてしまう
     console.error("Sync Error:", err);
+    alert("クラウドへの保存に失敗しました。電波の状態を確認して、もう一度保存してください。");
   } finally {
     if (showFeedback) { setTimeout(() => { hideLockOverlay(); }, 400); }
   }
@@ -1084,6 +1146,10 @@ async function saveStoreConfigToCloud(showFeedback = true) {
 
 async function saveSnapshotToCloud(showFeedback = false) {
   if (!currentUser) return;
+  if (!initialDataLoaded) {
+    console.warn("データ読込に失敗しているため、保存を中止しました。");
+    return;
+  }
   const curStore = getCurrentStore();
   const fullSnapshot = getActiveStoreConfig();
 
