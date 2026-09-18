@@ -241,6 +241,13 @@
     flex-shrink: 0;
   }
 
+  /* 在庫がクラウドへ保存できているかを、操作の邪魔にならない大きさで常に出す。
+     「保存されていると思っていたのに消えていた」を防ぐのが目的 */
+  .save-state { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .save-state:empty { display: none; }
+  .save-state.pending { background: #422006; border: 1px solid #b45309; color: #fbbf24; }
+  .save-state.saved { background: #052e16; border: 1px solid #15803d; color: #4ade80; }
+
   .waste-alert-bar {
     display: flex;
     align-items: center;
@@ -585,6 +592,7 @@
       <div class="header-left">
         <div class="app-title-tag">FF管理</div>
         <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
+        <div class="save-state" id="stockSaveState"></div>
       </div>
       <div class="header-menu">
         <button class="btn-global-restore" onclick="toggleHeaderMenu(event)">⋯ メニュー</button>
@@ -955,6 +963,103 @@ async function ensureStoreConfigLoaded(storeId) {
   }
   // ドキュメントが無い＝まだ設定を作っていない新規店舗。初期設定から始めてよい
   loadedStoreConfigIds.add(storeId);
+  await loadStockForStore(storeId);
+}
+
+// ===== 在庫数の保存 =====
+// 在庫数は1日に何百回も変わるが、什器配置やスケジュールは月に数回しか変わらない。
+// これらを同じドキュメントに入れていると、在庫を頻繁に保存するたびに設定まで
+// 書き換えることになり、通信が不安定なときに設定を巻き込んで壊してしまう。
+// そのため在庫だけを storeStock コレクションへ分け、設定とは独立に保存する。
+const STOCK_SAVE_DELAY_MS = 10000; // ホーム画面のバッジ(10秒)と同じ間隔に揃える
+let stockSaveTimer = null;
+let stockSaveDirty = false;
+
+/** 在庫が変わったことを記録し、しばらく操作が止まったらまとめて保存する */
+function markStockChanged() {
+  stockSaveDirty = true;
+  if (stockSaveTimer) clearTimeout(stockSaveTimer);
+  stockSaveTimer = setTimeout(() => { stockSaveTimer = null; saveStockToCloud(); }, STOCK_SAVE_DELAY_MS);
+  updateStockSaveState();
+}
+
+/** 什器の各マスの在庫数を、保存用の形に取り出す */
+function collectStockMap() {
+  const conf = getActiveStoreConfig();
+  const map = {};
+  (conf.fixtures || []).forEach((sec, sIdx) => {
+    (sec.cells || []).forEach((cell, cIdx) => {
+      if (!cell || cell.itemId === 0) return;
+      map[`${sIdx}_${cIdx}`] = {
+        itemId: cell.itemId,
+        stock: cell.stock || 0,
+        cookTime: cell.cookTime || null
+      };
+    });
+  });
+  return map;
+}
+
+/**
+ * 保存しておいた在庫数を什器へ反映する。
+ * 什器配置を編集していると同じ添字が別の商品を指すことがあるため、
+ * 商品が一致するマスだけに適用し、取り違えを防ぐ。
+ */
+function applyStockMap(conf, stockMap) {
+  if (!stockMap) return;
+  (conf.fixtures || []).forEach((sec, sIdx) => {
+    (sec.cells || []).forEach((cell, cIdx) => {
+      const saved = stockMap[`${sIdx}_${cIdx}`];
+      if (!saved || saved.itemId !== cell.itemId) return;
+      cell.stock = saved.stock || 0;
+      cell.cookTime = saved.cookTime || null;
+    });
+  });
+}
+
+/** 指定した店舗の在庫数をクラウドから読み込んで反映する */
+async function loadStockForStore(storeId) {
+  const doc = await db.collection('storeStock').doc(storeId).get();
+  // 保存先を分ける前のデータには storeStock が無い。その場合は
+  // storesConfig 側に入っている在庫数がそのまま使われる
+  if (doc.exists) applyStockMap(STORES_CONFIG[storeId], doc.data().stock);
+}
+
+async function saveStockToCloud() {
+  if (!currentUser || !initialDataLoaded || !stockSaveDirty) return;
+  const curStore = getCurrentStore();
+  if (!loadedStoreConfigIds.has(curStore.id)) return;
+
+  try {
+    await db.collection('storeStock').doc(curStore.id).set({
+      stock: collectStockMap(),
+      updatedAt: new Date().toISOString()
+    });
+    stockSaveDirty = false;
+  } catch (err) {
+    console.error("在庫の保存に失敗:", err);
+    // 保存できていないことは画面に出し続ける。次の操作で再度保存を試みる
+  }
+  updateStockSaveState();
+}
+
+/** 保留中の在庫保存をすぐ実行する（画面を離れる・閉じるとき） */
+async function flushStockSave() {
+  if (stockSaveTimer) { clearTimeout(stockSaveTimer); stockSaveTimer = null; }
+  await saveStockToCloud();
+}
+
+/** 在庫が保存済みかどうかをヘッダーに表示する */
+function updateStockSaveState() {
+  const el = document.getElementById("stockSaveState");
+  if (!el) return;
+  if (stockSaveDirty) {
+    el.className = "save-state pending";
+    el.innerText = "● 在庫を保存中…";
+  } else {
+    el.className = "save-state saved";
+    el.innerText = "✓ 在庫を保存しました";
+  }
 }
 
 function getCurrentStore() {
@@ -1040,6 +1145,7 @@ async function loadInitialDataFromSpreadsheet() {
       DAILY_ARCHIVES[getTodayDateString()] = archiveDoc.data().counts || {};
     }
     loadedStoreConfigIds.add(curStore.id);
+    await loadStockForStore(curStore.id);
     applyCurrentStoreData();
     clearUnsaved();
     initialDataLoaded = true;
@@ -1210,6 +1316,8 @@ async function saveSnapshotToCloud(showFeedback = false) {
 // 【最適化】変更がある時だけ自動保存する画面遷移
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
+  // 10秒待たずに、画面を離れる時点で在庫を確定させる
+  await flushStockSave();
   await saveCurrentViewInputs();
 
   // ★設定に変更がある場合のみクラウド保存（変更がなければ通信ゼロで一瞬で切り替え）
@@ -1415,6 +1523,7 @@ function confirmWaste() {
   if (qty > 0) {
     cell.stock = Math.max(0, cell.stock - qty);
     recordArchiveAndSync(cell.itemId, 'waste', qty);
+    markStockChanged();
     refreshHomeCell(cellKey);
     updateWasteAlertBar();
   }
@@ -1547,6 +1656,7 @@ function handleTouch(cellKey, type) {
       startCommitTimer(cellKey, 'sell');
     }
   }
+  markStockChanged();
   refreshHomeCell(cellKey);
   updateWasteAlertBar();
 }
@@ -2920,6 +3030,13 @@ function printPlanSheets() {
 }
 
 window.addEventListener('resize', autoFitTitles);
+
+// タブレットを閉じる・別のアプリに切り替える時点で、保留中の在庫保存を確定させる。
+// visibilitychange を使うのは、タブレットでは beforeunload が発火しないことがあるため。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushStockSave();
+});
+
 setInterval(updateClock, 1000);
 updateClock();
 
