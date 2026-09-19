@@ -241,6 +241,22 @@
     flex-shrink: 0;
   }
 
+  /* 在庫がクラウドへ保存できているかを、操作の邪魔にならない大きさで常に出す。
+     「保存されていると思っていたのに消えていた」を防ぐのが目的 */
+  .save-state { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .save-state:empty { display: none; }
+  .save-state.pending { background: #422006; border: 1px solid #b45309; color: #fbbf24; }
+  .save-state.saved { background: #052e16; border: 1px solid #15803d; color: #4ade80; }
+  .save-state.failed { background: #450a0a; border: 1px solid #dc2626; color: #fca5a5; }
+
+  /* 送信できていない記録があることを、操作をふさがずに知らせ続ける。
+     指で押せる大きさの再送信ボタンを添える */
+  .pending-bar { display: none; align-items: center; gap: 10px; background: #422006; border: 1.5px solid #b45309; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; flex-shrink: 0; }
+  .pending-bar-label { font-size: 11px; font-weight: 900; color: #fbbf24; white-space: nowrap; }
+  .pending-bar-text { flex: 1; font-size: 13px; color: #fde68a; }
+  .pending-bar-btn { min-height: 44px; padding: 0 16px; background: #b45309; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+  .pending-bar-btn:active { background: #92400e; }
+
   .waste-alert-bar {
     display: flex;
     align-items: center;
@@ -520,13 +536,20 @@
 
   .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
   .modal-content { background: #1e293b; border: 1.5px solid #ef4444; border-radius: 10px; width: 300px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  /* バックアップの世代選び。タブレットの指で押せるよう、1件あたり48px以上を確保する */
+  .backup-modal-content { border-color: #38bdf8; width: 380px; max-width: 92vw; }
+  .backup-list { display: flex; flex-direction: column; gap: 6px; max-height: 44vh; overflow-y: auto; }
+  .backup-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 8px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #fff; cursor: pointer; text-align: left; }
+  .backup-entry:active { background: #1e3a5f; }
+  .backup-entry-time { font-size: 14px; font-weight: bold; }
+  .backup-entry-go { font-size: 11px; color: #38bdf8; white-space: nowrap; }
 
   #printSheetContainer { display: none; }
 
   @media print {
     @page { size: A4 landscape; margin: 8mm; }
     body { background: #ffffff !important; color: #000000 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-    header, .waste-alert-bar, .view-container, .modal-overlay, .sync-lock-overlay { display: none !important; }
+    header, .waste-alert-bar, .pending-bar, .view-container, .modal-overlay, .sync-lock-overlay { display: none !important; }
     #printSheetContainer { display: block !important; background: #ffffff !important; }
     .print-page { page-break-after: always; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
     .print-page:last-child { page-break-after: avoid; }
@@ -585,6 +608,7 @@
       <div class="header-left">
         <div class="app-title-tag">FF管理</div>
         <div class="store-badge" id="currentStoreBadge">🏪 店舗未選択</div>
+        <div class="save-state" id="stockSaveState"></div>
       </div>
       <div class="header-menu">
         <button class="btn-global-restore" onclick="toggleHeaderMenu(event)">⋯ メニュー</button>
@@ -614,6 +638,13 @@
 <div class="waste-alert-bar" id="wasteAlertBar">
   <div class="waste-bar-label"><span>⚠️ 期限間近</span></div>
   <div class="waste-items-scroll" id="wasteItemsContainer"></div>
+</div>
+
+<!-- クラウドへ送れていない記録があることを知らせるバー -->
+<div class="pending-bar" id="pendingBar">
+  <div class="pending-bar-label">📡 未送信</div>
+  <div class="pending-bar-text" id="pendingBarText"></div>
+  <button class="pending-bar-btn" onclick="retryPendingSends()">🔄 今すぐ再送信</button>
 </div>
 
 <!-- ホーム画面 -->
@@ -814,6 +845,18 @@
 </div>
 
 <!-- 廃棄モーダル -->
+<!-- バックアップの世代を選んで復元するモーダル -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal-content backup-modal-content">
+    <div style="font-size:13px; font-weight:900; color:#38bdf8;">🔄 <span id="backupStoreName"></span> を戻す時点を選ぶ</div>
+    <div style="font-size:11px; color:#94a3b8; line-height:1.5;">
+      新しい順に並んでいます。選んだ時点の什器配置・スケジュール・在庫に戻り、クラウドにも保存されます。
+    </div>
+    <div class="backup-list" id="backupListBody"></div>
+    <button class="btn-save-action" style="background:#475569;" onclick="closeBackupModal()">キャンセル</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="wasteModal">
   <div class="modal-content">
     <div style="font-size:13px; font-weight:900; color:#f87171;" id="wasteModalTitle">廃棄登録</div>
@@ -931,7 +974,254 @@ let currentActiveView = "home";
 // クラウドからの読み込みに成功したか。失敗したまま保存すると初期設定で上書きしてしまうため、
 // これが false の間は保存処理を行わない
 let initialDataLoaded = false;
+// クラウドから設定を読み込み済みの店舗ID。
+// 未読込の店舗では getActiveStoreConfig() が初期設定を返すため、それをそのまま保存すると
+// その店舗のクラウド上の什器配置・スケジュールを初期設定で丸ごと消してしまう。
+// 「読み込めた店舗しか保存しない」ことを保証するために使う。
+const loadedStoreConfigIds = new Set();
 let scheduleDisplayedDay = "weekday"; // スケジュール画面に現在表示している曜日
+
+// 指定した店舗の設定をクラウドから読み込む（読み込み済みなら何もしない）。
+// 通信に失敗した場合は例外を投げ、呼び出し元が「初期設定のまま保存する」ことを
+// 避けられるようにする（黙って初期設定を使うと、その店舗の設定が消える）。
+async function ensureStoreConfigLoaded(storeId) {
+  if (!storeId || loadedStoreConfigIds.has(storeId)) return;
+  const doc = await db.collection('storesConfig').doc(storeId).get();
+  if (doc.exists) {
+    const conf = doc.data();
+    const target = STORES_CONFIG[storeId] || {};
+    STORES_CONFIG[storeId] = {
+      fixtures: conf.fixtures || target.fixtures || JSON.parse(JSON.stringify(DEFAULT_FIXTURES)),
+      schedule: conf.schedule || target.schedule || JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
+      timeSlots: conf.timeSlots || target.timeSlots || JSON.parse(JSON.stringify(DEFAULT_TIME_SLOTS))
+    };
+  }
+  // ドキュメントが無い＝まだ設定を作っていない新規店舗。初期設定から始めてよい
+  loadedStoreConfigIds.add(storeId);
+  await loadStockForStore(storeId);
+}
+
+// ===== 在庫数の保存 =====
+// 在庫数は1日に何百回も変わるが、什器配置やスケジュールは月に数回しか変わらない。
+// これらを同じドキュメントに入れていると、在庫を頻繁に保存するたびに設定まで
+// 書き換えることになり、通信が不安定なときに設定を巻き込んで壊してしまう。
+// そのため在庫だけを storeStock コレクションへ分け、設定とは独立に保存する。
+const STOCK_SAVE_DELAY_MS = 10000; // ホーム画面のバッジ(10秒)と同じ間隔に揃える
+let stockSaveTimer = null;
+let stockSaveDirty = false;
+
+/** 在庫が変わったことを記録し、しばらく操作が止まったらまとめて保存する */
+function markStockChanged() {
+  stockSaveDirty = true;
+  if (stockSaveTimer) clearTimeout(stockSaveTimer);
+  stockSaveTimer = setTimeout(() => { stockSaveTimer = null; saveStockToCloud(); }, STOCK_SAVE_DELAY_MS);
+  updateStockSaveState();
+}
+
+/** 什器の各マスの在庫数を、保存用の形に取り出す */
+function collectStockMap() {
+  const conf = getActiveStoreConfig();
+  const map = {};
+  (conf.fixtures || []).forEach((sec, sIdx) => {
+    (sec.cells || []).forEach((cell, cIdx) => {
+      if (!cell || cell.itemId === 0) return;
+      map[`${sIdx}_${cIdx}`] = {
+        itemId: cell.itemId,
+        stock: cell.stock || 0,
+        cookTime: cell.cookTime || null
+      };
+    });
+  });
+  return map;
+}
+
+/**
+ * 保存しておいた在庫数を什器へ反映する。
+ * 什器配置を編集していると同じ添字が別の商品を指すことがあるため、
+ * 商品が一致するマスだけに適用し、取り違えを防ぐ。
+ */
+function applyStockMap(conf, stockMap) {
+  if (!stockMap) return;
+  (conf.fixtures || []).forEach((sec, sIdx) => {
+    (sec.cells || []).forEach((cell, cIdx) => {
+      const saved = stockMap[`${sIdx}_${cIdx}`];
+      if (!saved || saved.itemId !== cell.itemId) return;
+      cell.stock = saved.stock || 0;
+      cell.cookTime = saved.cookTime || null;
+    });
+  });
+}
+
+/** 指定した店舗の在庫数をクラウドから読み込んで反映する */
+async function loadStockForStore(storeId) {
+  const doc = await db.collection('storeStock').doc(storeId).get();
+  // 保存先を分ける前のデータには storeStock が無い。その場合は
+  // storesConfig 側に入っている在庫数がそのまま使われる
+  if (doc.exists) applyStockMap(STORES_CONFIG[storeId], doc.data().stock);
+}
+
+async function saveStockToCloud() {
+  if (!currentUser || !initialDataLoaded || !stockSaveDirty) return;
+  const curStore = getCurrentStore();
+  if (!loadedStoreConfigIds.has(curStore.id)) return;
+
+  try {
+    await db.collection('storeStock').doc(curStore.id).set({
+      stock: collectStockMap(),
+      updatedAt: new Date().toISOString()
+    });
+    stockSaveDirty = false;
+    stockSaveFailed = false;
+  } catch (err) {
+    console.error("在庫の保存に失敗:", err);
+    // 保存できていないことは画面に出し続ける。次の操作で再度保存を試みる
+    stockSaveFailed = true;
+  }
+  updateStockSaveState();
+  updatePendingBar();
+}
+
+/** 保留中の在庫保存をすぐ実行する（画面を離れる・閉じるとき） */
+async function flushStockSave() {
+  if (stockSaveTimer) { clearTimeout(stockSaveTimer); stockSaveTimer = null; }
+  await saveStockToCloud();
+}
+
+// ===== 送信できなかった記録の保持と再送信 =====
+// 電波が悪いと調理/販売/廃棄の記録がクラウドへ送れないことがある。
+// 以前は console にエラーを出すだけで画面には何も出ず、記録が黙って消えていた。
+// 送れなかった記録は端末に残し、画面で知らせ、通信が戻ったら送り直す。
+const PENDING_RECORDS_KEY = 'ffmanage_pending_records';
+const PENDING_RETRY_INTERVAL_MS = 60000;
+let pendingRecords = [];   // 送信待ちの調理/販売/廃棄の記録
+let pendingArchives = {};  // 送信待ちの日別集計 { "店舗ID_日付": 集計 }
+let isFlushingPending = false;
+let stockSaveFailed = false;
+
+function loadPendingRecords() {
+  try {
+    const raw = localStorage.getItem(PENDING_RECORDS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    pendingRecords = Array.isArray(saved.records) ? saved.records : [];
+    pendingArchives = (saved.archives && typeof saved.archives === 'object') ? saved.archives : {};
+  } catch (err) {
+    console.error("未送信データの読み込みに失敗:", err);
+  }
+}
+
+// 端末に残しておく。アプリを閉じたり再読み込みしても送信待ちの記録が消えないようにする
+function persistPendingRecords() {
+  try {
+    localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify({ records: pendingRecords, archives: pendingArchives }));
+  } catch (err) {
+    console.error("未送信データの保存に失敗:", err);
+  }
+}
+
+function queuePendingRecord(payload) {
+  pendingRecords.push(payload);
+  persistPendingRecords();
+  updatePendingBar();
+}
+
+// 日別集計はその日の合計なので、同じ日の分は最新の内容で上書きしてよい
+function queuePendingArchive(docId, counts) {
+  pendingArchives[docId] = JSON.parse(JSON.stringify(counts));
+  persistPendingRecords();
+  updatePendingBar();
+}
+
+function hasPendingSends() {
+  return pendingRecords.length > 0 || Object.keys(pendingArchives).length > 0 || stockSaveFailed;
+}
+
+/** 送信待ちの記録をまとめて送り直す */
+async function flushPendingRecords() {
+  if (isFlushingPending || !currentUser) return;
+  if (pendingRecords.length === 0 && Object.keys(pendingArchives).length === 0) return;
+
+  isFlushingPending = true;
+  updatePendingBar();
+  try {
+    // 送れたものだけ取り除き、送れなかったものは次の機会まで残す
+    const remaining = [];
+    for (const payload of pendingRecords) {
+      try {
+        await db.collection('recordLog').add(payload);
+      } catch (err) {
+        console.error("記録の再送信に失敗:", err);
+        remaining.push(payload);
+      }
+    }
+    pendingRecords = remaining;
+
+    for (const docId of Object.keys(pendingArchives)) {
+      try {
+        await db.collection('dailyArchives').doc(docId).set({ counts: pendingArchives[docId] }, { merge: true });
+        delete pendingArchives[docId];
+      } catch (err) {
+        console.error("集計の再送信に失敗:", err);
+      }
+    }
+    persistPendingRecords();
+  } finally {
+    isFlushingPending = false;
+    updatePendingBar();
+  }
+}
+
+/** 在庫の保存と記録の再送信をまとめてやり直す（画面には何も出さない） */
+async function retrySilently() {
+  if (stockSaveFailed) stockSaveDirty = true;
+  await flushStockSave();
+  await flushPendingRecords();
+}
+
+/** 「今すぐ再送信」ボタン。結果をその場で知らせる */
+async function retryPendingSends() {
+  await retrySilently();
+  alert(hasPendingSends()
+    ? "まだ送信できていない記録があります。電波の状態を確認して、もう一度お試しください。\n（記録はこの端末に残っているので、消えることはありません）"
+    : "送信待ちの記録をすべて送信しました。");
+}
+
+/** 送信できていない記録があることを画面に出し続ける */
+function updatePendingBar() {
+  const bar = document.getElementById("pendingBar");
+  const text = document.getElementById("pendingBarText");
+  if (!bar || !text) return;
+
+  if (!hasPendingSends()) {
+    bar.style.display = "none";
+    return;
+  }
+  const parts = [];
+  if (pendingRecords.length > 0) parts.push(`調理・販売の記録 ${pendingRecords.length} 件`);
+  if (Object.keys(pendingArchives).length > 0) parts.push("日別の集計");
+  if (stockSaveFailed) parts.push("在庫数");
+  text.innerText = isFlushingPending
+    ? "再送信しています…"
+    : `${parts.join("・")}をクラウドへ送れていません（この端末に残しています）`;
+  bar.style.display = "flex";
+}
+
+/** 在庫が保存済みかどうかをヘッダーに表示する */
+function updateStockSaveState() {
+  const el = document.getElementById("stockSaveState");
+  if (!el) return;
+  if (stockSaveFailed) {
+    // 保存できていないのに「保存中」と出すと、保存済みのつもりで閉じてしまう
+    el.className = "save-state failed";
+    el.innerText = "⚠ 在庫を保存できていません";
+  } else if (stockSaveDirty) {
+    el.className = "save-state pending";
+    el.innerText = "● 在庫を保存中…";
+  } else {
+    el.className = "save-state saved";
+    el.innerText = "✓ 在庫を保存しました";
+  }
+}
 
 function getCurrentStore() {
   return STORE_MASTER.find(s => s.id === currentStoreId)
@@ -1015,10 +1305,15 @@ async function loadInitialDataFromSpreadsheet() {
     if (archiveDoc.exists) {
       DAILY_ARCHIVES[getTodayDateString()] = archiveDoc.data().counts || {};
     }
+    loadedStoreConfigIds.add(curStore.id);
+    await loadStockForStore(curStore.id);
     applyCurrentStoreData();
     clearUnsaved();
     initialDataLoaded = true;
     document.getElementById("loadErrorOverlay").style.display = "none";
+    await autoBackupIfNeeded();
+    // 前回送れずに端末へ残った記録を、通信が戻ったこの時点で送り直す
+    await flushPendingRecords();
   } catch (err) {
     // 読み込みに失敗したまま操作させると、画面に出ている初期設定を本物と思い込んで
     // 保存してしまい、クラウドの正しいデータを丸ごと上書きしてしまう。
@@ -1036,51 +1331,171 @@ async function retryInitialLoad() {
   await loadInitialDataFromSpreadsheet();
 }
 
+// ===== バックアップ =====
+// 以前は店舗ごとに1世代しか持てず、新しいバックアップを取ると前の内容が消えていた。
+// 「気づいたときには、壊れた状態でバックアップを上書きしていた」を防ぐため、
+// 日時ごとのドキュメントに分けて複数世代を残す。
+const BACKUP_KEEP_GENERATIONS = 7;
+
+/** バックアップのドキュメントIDに使う日時（YYYY-MM-DD_HHMM） */
+function backupStampFromDate(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+// 店舗IDに「_」が含まれても切り分けられるよう、区切りは「__」にする
+function backupDocId(storeId, stamp) { return `${storeId}__${stamp}`; }
+
+function parseBackupDocId(docId) {
+  const sep = docId.lastIndexOf('__');
+  // 区切りが無いものは、世代管理を入れる前の「1世代だけ」のバックアップ
+  if (sep < 0) return { storeId: docId, stamp: "" };
+  return { storeId: docId.slice(0, sep), stamp: docId.slice(sep + 2) };
+}
+
+/** 指定した店舗のバックアップを、新しい順に一覧で取り出す */
+async function listBackupsForStore(storeId) {
+  const snap = await db.collection('manualBackups').get();
+  const list = [];
+  snap.docs.forEach(d => {
+    const parsed = parseBackupDocId(d.id);
+    if (parsed.storeId !== storeId) return;
+    const data = d.data() || {};
+    list.push({
+      docId: d.id,
+      stamp: parsed.stamp,
+      backedUpAt: data.backedUpAt || 0,
+      isLegacy: !parsed.stamp
+    });
+  });
+  list.sort((a, b) => (b.backedUpAt || 0) - (a.backedUpAt || 0));
+  return list;
+}
+
+function backupLabel(entry) {
+  if (entry.backedUpAt) return new Date(entry.backedUpAt).toLocaleString('ja-JP');
+  return entry.isLegacy ? "日時不明（古い形式のバックアップ）" : entry.stamp;
+}
+
+/** 世代数を超えた古いバックアップを消す */
+async function pruneOldBackups(storeId) {
+  const list = await listBackupsForStore(storeId);
+  // 古い形式の1世代バックアップは復旧の最後の頼りなので、世代数には数えず残す
+  const generational = list.filter(b => !b.isLegacy);
+  for (const old of generational.slice(BACKUP_KEEP_GENERATIONS)) {
+    try {
+      await db.collection('manualBackups').doc(old.docId).delete();
+    } catch (err) {
+      console.error("古いバックアップの削除に失敗:", err);
+    }
+  }
+}
+
+/** 1店舗分のバックアップを作る。設定が取れなければ false を返す */
+async function createBackupForStore(store, backedUpAt, stamp) {
+  const storeConfig = store.id === getCurrentStore().id
+    ? getActiveStoreConfig()
+    : (await db.collection('storesConfig').doc(store.id).get()).data() || null;
+  if (!storeConfig) return false;
+
+  await db.collection('manualBackups').doc(backupDocId(store.id, stamp)).set({
+    items: ITEMS,
+    stores: STORE_MASTER,
+    storeConfig,
+    storeId: store.id,
+    backedUpAt
+  });
+  await pruneOldBackups(store.id);
+  return true;
+}
+
 // 📦 手動バックアップ作成（全店舗分）
 async function handleManualBackup() {
   if (!currentUser) return;
-  const curStore = getCurrentStore();
   await saveCurrentViewInputs();
 
   showLockOverlay("バックアップ作成中...", "全店舗の安全なバックアップを作成しています");
   try {
-    const backedUpAt = Date.now();
+    const now = new Date();
+    const stamp = backupStampFromDate(now);
+    let created = 0;
     for (const store of STORE_MASTER) {
-      const storeConfig = store.id === curStore.id
-        ? getActiveStoreConfig()
-        : (await db.collection('storesConfig').doc(store.id).get()).data() || null;
-
-      if (!storeConfig) continue;
-
-      const payloadData = {
-        items: ITEMS,
-        stores: STORE_MASTER,
-        storeConfig,
-        backedUpAt
-      };
-      await db.collection('manualBackups').doc(store.id).set(payloadData);
+      if (await createBackupForStore(store, now.getTime(), stamp)) created++;
     }
-
-    alert(`全店舗（${STORE_MASTER.length}件）の手動バックアップを正常に作成しました！`);
+    alert(`全店舗（${created}件）のバックアップを作成しました。\n直近${BACKUP_KEEP_GENERATIONS}世代まで残ります。`);
   } catch (err) {
     console.error("Backup Error:", err);
-    alert("バックアップの作成に失敗しました。");
+    alert("バックアップの作成に失敗しました。電波の状態を確認して、もう一度お試しください。");
   } finally {
     hideLockOverlay();
   }
 }
 
-// 🔄 バックアップ復元
+// 1日1回、その日の最初の起動時に自動でバックアップを取る。
+// 手動バックアップは操作を忘れると1世代も残らないため、
+// 「昨日の状態に戻す」がいつでもできる状態を保っておく。
+async function autoBackupIfNeeded() {
+  if (!currentUser || !initialDataLoaded) return;
+  const store = getCurrentStore();
+  try {
+    const list = await listBackupsForStore(store.id);
+    const today = getTodayDateString();
+    if (list.some(b => b.stamp.startsWith(today))) return;
+
+    const now = new Date();
+    await createBackupForStore(store, now.getTime(), backupStampFromDate(now));
+  } catch (err) {
+    // 自動バックアップの失敗で起動を止めないが、黙って消えないよう記録は残す
+    console.error("自動バックアップに失敗:", err);
+  }
+}
+
+// 🔄 バックアップ復元（世代を選ぶ）
 async function handleManualRestore() {
   if (!currentUser) return;
   const curStore = getCurrentStore();
 
-  // いつ時点のバックアップかを確認してから戻せるように、先に読み出す。
-  // 意図しない時点に戻してしまう事故を防ぐため
-  showLockOverlay("バックアップを確認中...", `【${curStore.name}】のバックアップを読み込んでいます`);
+  showLockOverlay("バックアップを確認中...", `【${curStore.name}】のバックアップを探しています`);
+  let list;
+  try {
+    list = await listBackupsForStore(curStore.id);
+  } catch (err) {
+    hideLockOverlay();
+    console.error("Restore Fetch Error:", err);
+    alert("バックアップの読み込みに失敗しました。電波の状態を確認してもう一度お試しください。");
+    return;
+  }
+  hideLockOverlay();
+
+  if (list.length === 0) {
+    alert("この店舗のバックアップが見つかりませんでした。");
+    return;
+  }
+
+  const body = document.getElementById("backupListBody");
+  body.innerHTML = list.map(entry => `
+    <button class="backup-entry" onclick="restoreFromBackup('${entry.docId}')">
+      <span class="backup-entry-time">${backupLabel(entry)}</span>
+      <span class="backup-entry-go">この時点に戻す</span>
+    </button>
+  `).join("");
+  document.getElementById("backupStoreName").innerText = curStore.name;
+  document.getElementById("backupModal").style.display = "flex";
+}
+
+function closeBackupModal() {
+  document.getElementById("backupModal").style.display = "none";
+}
+
+/** 選んだ世代のバックアップで、この店舗のデータを復元する */
+async function restoreFromBackup(docId) {
+  const curStore = getCurrentStore();
+  closeBackupModal();
+
+  showLockOverlay("バックアップを読み込み中...", `【${curStore.name}】のバックアップを読み込んでいます`);
   let doc;
   try {
-    doc = await db.collection('manualBackups').doc(curStore.id).get();
+    doc = await db.collection('manualBackups').doc(docId).get();
   } catch (err) {
     hideLockOverlay();
     console.error("Restore Fetch Error:", err);
@@ -1090,18 +1505,18 @@ async function handleManualRestore() {
   hideLockOverlay();
 
   if (!doc.exists) {
-    alert("この店舗の手動バックアップデータが見つかりませんでした。");
+    alert("このバックアップは見つかりませんでした。");
     return;
   }
 
-  const backedUpAt = doc.data().backedUpAt;
-  const backedUpAtText = backedUpAt
-    ? new Date(backedUpAt).toLocaleString('ja-JP')
+  const bck = doc.data();
+  const backedUpAtText = bck.backedUpAt
+    ? new Date(bck.backedUpAt).toLocaleString('ja-JP')
     : "不明（日時が記録されていません）";
 
   if (!confirm(
-    `【${curStore.name}】を手動バックアップの状態に復元します。\n\n` +
-    `このバックアップを取った日時: ${backedUpAtText}\n\n` +
+    `【${curStore.name}】を次の時点の状態に復元します。\n\n` +
+    `バックアップの日時: ${backedUpAtText}\n\n` +
     `現在のデータはこの内容で上書きされ、クラウドにも保存されます。\n` +
     `（商品マスタは全店舗共通のため、この操作で全店舗の商品マスタが復元されます）\n` +
     `よろしいですか？`
@@ -1109,7 +1524,6 @@ async function handleManualRestore() {
 
   showLockOverlay("バックアップから復元中...", `【${curStore.name}】のデータを復元しています`);
   try {
-    const bck = doc.data();
     if (bck.items && bck.items.length > 0) {
       ITEMS = [{ id: 0, name: "（空き）", category: "-", price: 0, limitHour: 0 }].concat(bck.items);
     }
@@ -1119,6 +1533,9 @@ async function handleManualRestore() {
     applyCurrentStoreData();
     // 復元した内容をメモリ上だけでなくクラウドにも保存する（保存しないと再読み込みで復元前の状態に戻ってしまうため）
     await saveStoreConfigToCloud(false);
+    // 在庫も復元した内容に揃える（分離した保存先が古いままだと、次に開いたとき在庫だけ戻ってしまう）
+    stockSaveDirty = true;
+    await flushStockSave();
     renderItemMasterTable();
     renderHomeFixtures();
     alert(`【${curStore.name}】を ${backedUpAtText} 時点の状態に復元し、クラウドにも保存しました。`);
@@ -1140,6 +1557,12 @@ async function saveStoreConfigToCloud(showFeedback = true) {
     return;
   }
   const curStore = getCurrentStore();
+  // 設定を読み込めていない店舗を保存すると、初期設定でその店舗の設定を消してしまう
+  if (!loadedStoreConfigIds.has(curStore.id)) {
+    console.warn("この店舗の設定をまだ読み込めていないため、保存を中止しました。");
+    alert(`【${curStore.name}】の設定をまだ読み込めていないため、保存を中止しました。\n電波の状態を確認して、画面を開き直してください。`);
+    return;
+  }
   if (showFeedback) showLockOverlay("設定を保存中...", `【${curStore.name}】の設定を同期しています`);
 
   try {
@@ -1163,6 +1586,10 @@ async function saveSnapshotToCloud(showFeedback = false) {
     return;
   }
   const curStore = getCurrentStore();
+  if (!loadedStoreConfigIds.has(curStore.id)) {
+    console.warn("この店舗の設定をまだ読み込めていないため、保存を中止しました。");
+    return;
+  }
   const fullSnapshot = getActiveStoreConfig();
 
   try {
@@ -1175,6 +1602,8 @@ async function saveSnapshotToCloud(showFeedback = false) {
 // 【最適化】変更がある時だけ自動保存する画面遷移
 async function switchViewWithSave(targetView) {
   if (currentActiveView === targetView) return;
+  // 10秒待たずに、画面を離れる時点で在庫を確定させる
+  await flushStockSave();
   await saveCurrentViewInputs();
 
   // ★設定に変更がある場合のみクラウド保存（変更がなければ通信ゼロで一瞬で切り替え）
@@ -1237,11 +1666,19 @@ function recordArchiveAndSync(itemId, type, qty) {
 
   if (!currentUser) return;
 
-  db.collection('recordLog').add(payloadData).catch(err => console.error("Firestore送信エラー:", err));
+  // 送信に失敗したら端末に残しておき、あとで送り直す（黙って消さない）
+  db.collection('recordLog').add(payloadData).catch(err => {
+    console.error("Firestore送信エラー:", err);
+    queuePendingRecord(payloadData);
+  });
 
-  db.collection('dailyArchives').doc(`${curStore.id}_${dateKey}`)
+  const archiveDocId = `${curStore.id}_${dateKey}`;
+  db.collection('dailyArchives').doc(archiveDocId)
     .set({ counts: DAILY_ARCHIVES[dateKey] }, { merge: true })
-    .catch(err => console.error("集計保存エラー:", err));
+    .catch(err => {
+      console.error("集計保存エラー:", err);
+      queuePendingArchive(archiveDocId, DAILY_ARCHIVES[dateKey]);
+    });
 }
 
 function updateClock() {
@@ -1380,6 +1817,7 @@ function confirmWaste() {
   if (qty > 0) {
     cell.stock = Math.max(0, cell.stock - qty);
     recordArchiveAndSync(cell.itemId, 'waste', qty);
+    markStockChanged();
     refreshHomeCell(cellKey);
     updateWasteAlertBar();
   }
@@ -1512,6 +1950,7 @@ function handleTouch(cellKey, type) {
       startCommitTimer(cellKey, 'sell');
     }
   }
+  markStockChanged();
   refreshHomeCell(cellKey);
   updateWasteAlertBar();
 }
@@ -1687,6 +2126,9 @@ async function deleteStoreRow(idx) {
     if (currentStoreId === store.id) {
       currentStoreId = STORE_MASTER[0].id;
       localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+      // 移動先の店舗の設定を読み込んでから表示する(未読込のまま操作させると、
+      // 画面に出た初期設定をその店舗の設定だと思い込んで保存してしまう)
+      await ensureStoreConfigLoaded(currentStoreId);
       applyCurrentStoreData();
     }
 
@@ -1743,8 +2185,29 @@ async function saveStoreMaster(showFeedback = true) {
 
   // 「現在の店舗」は端末ごとの選択なので、共有のSTORE_MASTERには書き込まず
   // この端末のlocalStorageにのみ保存する(他店舗の端末の選択を上書きしないため)
+  const prevStoreId = currentStoreId;
   currentStoreId = (STORE_MASTER[selectedIdx] || STORE_MASTER[0]).id;
   localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+
+  // 店舗を切り替えたら、切替先の設定をクラウドから読み込んでから保存に進む。
+  // 読み込まずに進むと getActiveStoreConfig() が初期設定を返し、
+  // その内容で切替先の店舗の什器配置・スケジュールを丸ごと上書きしてしまう
+  if (currentStoreId !== prevStoreId) {
+    if (showFeedback) showLockOverlay("店舗を切り替え中...", "切替先の店舗の設定を読み込んでいます");
+    try {
+      await ensureStoreConfigLoaded(currentStoreId);
+    } catch (err) {
+      console.error("切替先の店舗設定の読込に失敗:", err);
+      // 読み込めないまま保存すると切替先の設定を消してしまうため、切替自体を取り消す
+      currentStoreId = prevStoreId;
+      localStorage.setItem('ffmanage_current_store_id', currentStoreId);
+      renderStoreMasterTable();
+      alert("切替先の店舗の設定を読み込めませんでした。電波の状態を確認して、もう一度お試しください。\n（設定が初期状態で上書きされるのを防ぐため、店舗の切り替えを中止しました）");
+      return;
+    } finally {
+      if (showFeedback) hideLockOverlay();
+    }
+  }
 
   if (renamed.length > 0) {
     if (showFeedback) showLockOverlay("店舗IDの変更を反映中...", "変更前のIDのデータを新しいIDへ引き継いでいます");
@@ -2861,6 +3324,22 @@ function printPlanSheets() {
 }
 
 window.addEventListener('resize', autoFitTitles);
+
+// タブレットを閉じる・別のアプリに切り替える時点で、保留中の在庫保存を確定させる。
+// visibilitychange を使うのは、タブレットでは beforeunload が発火しないことがあるため。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushStockSave();
+});
+
+// 送信待ちの記録は端末に残っているので、アプリを開き直しても引き継ぐ
+loadPendingRecords();
+updatePendingBar();
+
+// 電波が戻ったときに自動で送り直す（スタッフが再送信ボタンを押さなくても復旧する）
+setInterval(() => {
+  if (hasPendingSends()) retrySilently();
+}, PENDING_RETRY_INTERVAL_MS);
+
 setInterval(updateClock, 1000);
 updateClock();
 
