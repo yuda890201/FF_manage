@@ -265,7 +265,8 @@
     border-radius: 8px;
     padding: 4px 8px;
     margin-bottom: 6px;
-    height: 38px;
+    /* 調理時刻の吹き出しが付くと縦に伸びる。期限間近が無いときは従来の高さのまま */
+    min-height: 38px;
     flex-shrink: 0;
     gap: 8px;
     box-shadow: inset 0 0 8px rgba(220, 38, 38, 0.25);
@@ -289,17 +290,39 @@
     background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%);
     border: 1px solid #ef4444;
     border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 11px;
+    padding: 4px 8px 5px;
+    font-size: 12px;
     font-weight: 800;
     color: #fff;
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
     cursor: pointer;
     white-space: nowrap;
     animation: wastePulse 1.5s infinite alternate;
   }
+  /* 同じ商品が複数並ぶことがあるため、どの時間に作ったものかを商品名の上に吹き出しで出す。
+     ホバーやタップを待たずに読めるよう、常に表示する */
+  .waste-cook-bubble {
+    position: relative;
+    background: #fef3c7;
+    color: #7c2d12;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 1px 7px;
+    border-radius: 6px;
+    margin-bottom: 3px;
+  }
+  .waste-cook-bubble::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 100%;
+    border: 4px solid transparent;
+    border-top-color: #fef3c7;
+  }
+  .waste-chip-main { display: flex; align-items: center; gap: 6px; }
   @keyframes wastePulse {
     0% { border-color: #ef4444; }
     100% { border-color: #fca5a5; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
@@ -307,9 +330,9 @@
   .waste-time-tag {
     background: rgba(0, 0, 0, 0.4);
     color: #fef08a;
-    padding: 1px 4px;
+    padding: 1px 5px;
     border-radius: 3px;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .view-container {
@@ -860,6 +883,7 @@
 <div class="modal-overlay" id="wasteModal">
   <div class="modal-content">
     <div style="font-size:13px; font-weight:900; color:#f87171;" id="wasteModalTitle">廃棄登録</div>
+    <div style="font-size:12px; font-weight:bold; color:#fbbf24; background:#422006; border:1px solid #b45309; border-radius:6px; padding:4px 8px;" id="wasteModalInfo"></div>
     <div style="display:flex; align-items:center; gap:8px;">
       <label style="font-size:11px;">廃棄個数:</label>
       <input class="ctrl-input" style="width:70px;" type="number" id="wasteQtyInput" min="1" value="1">
@@ -1773,7 +1797,10 @@ function updateWasteAlertBar() {
           const limitMs = item.limitHour * 3600 * 1000;
           const remainingMinutes = Math.floor((limitMs - (now - cell.cookTime)) / 60000);
           if (remainingMinutes <= 30) {
-            nearWasteItems.push({ cellKey: `${sIdx}_${cIdx}`, name: item.name, stock: cell.stock, remainMin: remainingMinutes });
+            nearWasteItems.push({
+              cellKey: `${sIdx}_${cIdx}`, name: item.name, stock: cell.stock,
+              remainMin: remainingMinutes, cookTime: cell.cookTime
+            });
           }
         }
       }
@@ -1785,12 +1812,25 @@ function updateWasteAlertBar() {
     return;
   }
 
+  // 先に捨てるものから並べる（手前ほど急ぎ）
+  nearWasteItems.sort((a, b) => a.remainMin - b.remainMin);
+
   container.innerHTML = nearWasteItems.map(w => `
     <div class="waste-item-chip" onclick="openWasteModal('${w.cellKey}')">
-      <span>${w.name} (${w.stock}個)</span>
-      <span class="waste-time-tag">${w.remainMin <= 0 ? '期限切れ' : `残${w.remainMin}分`}</span>
+      <div class="waste-cook-bubble">${formatClockTime(w.cookTime)} 調理</div>
+      <div class="waste-chip-main">
+        <span>${w.name} (${w.stock}個)</span>
+        <span class="waste-time-tag">${w.remainMin <= 0 ? '期限切れ' : `残${w.remainMin}分`}</span>
+      </div>
     </div>
   `).join("");
+}
+
+/** 時刻を「14:05」の形にする */
+function formatClockTime(ms) {
+  if (!ms) return "調理時刻 不明";
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function openWasteModal(cellKey) {
@@ -1800,6 +1840,16 @@ function openWasteModal(cellKey) {
   const item = ITEMS.find(i => i.id === cell.itemId);
   activeWasteTarget = { cellKey, sIdx, cIdx };
   document.getElementById("wasteModalTitle").innerText = `🗑 廃棄処理: ${item.name}`;
+  // 実際に捨てる直前にも、どの時間に作ったものかを確認できるようにする
+  const infoEl = document.getElementById("wasteModalInfo");
+  if (cell.cookTime) {
+    const limitText = item.limitHour > 0
+      ? ` ／ 期限 ${formatClockTime(cell.cookTime + item.limitHour * 3600 * 1000)}`
+      : "";
+    infoEl.innerText = `${formatClockTime(cell.cookTime)} 調理${limitText}`;
+  } else {
+    infoEl.innerText = "調理時刻の記録がありません";
+  }
   document.getElementById("wasteQtyInput").value = cell.stock;
   document.getElementById("wasteQtyInput").max = cell.stock;
   document.getElementById("wasteModal").style.display = "flex";
